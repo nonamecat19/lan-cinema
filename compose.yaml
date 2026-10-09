@@ -1,0 +1,38 @@
+services:
+  tv:
+    build: .
+    image: hisense-tv:local
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      MEDIA_ROOT: /media
+      CACHE_DIR: /cache
+      TORRENT_ROOT: /torrent-files
+      TORRENT_EXTRA_ROOT: /extra-torrent-files
+      TORRENT_DOWNLOAD_ROOT: /downloads
+      TORRENT_URL: http://qbittorrent:8080
+      PORT: "8080"
+    volumes:
+      - "${MEDIA_HOST_PATH:-./videos}:/media"
+      - "${CACHE_HOST_PATH:-./cache}:/cache"
+      - "${TORRENT_HOST_PATH:-.}:/torrent-files:ro"
+      - "${TORRENT_EXTRA_HOST_PATH:-./torrent-files}:/extra-torrent-files:ro"
+      - "${DOWNLOAD_HOST_PATH:-./downloads}:/downloads:ro"
+    depends_on:
+      - qbittorrent
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      TZ: "${TZ:-Europe/Kyiv}"
+      WEBUI_PORT: "8080"
+      TORRENTING_PORT: "6881"
+    ports:
+      - "6881:6881/tcp"
+      - "6881:6881/udp"
+    volumes:
+      - "${QBITTORRENT_CONFIG_PATH:-./qbt-config}:/config"
+      - "${DOWNLOAD_HOST_PATH:-./downloads}:/downloads"

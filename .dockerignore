@@ -1,0 +1,12 @@
+.git
+.cache
+cache
+videos
+node_modules
+web/node_modules
+web/dist
+tv-streamer
+*.torrent
+downloads
+qbt-config
+.env

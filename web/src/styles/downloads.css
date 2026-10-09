@@ -1,0 +1,52 @@
+.download-heading { padding: 58px 0 42px; }
+.download-heading h1 { margin: 13px 0 11px; font-size: clamp(46px, 5.5vw, 78px); font-weight: 600; letter-spacing: -.07em; line-height: 1; }
+.download-heading p { max-width: 650px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
+.download-content { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr); gap: clamp(25px, 3vw, 48px); padding-bottom: 64px; }
+.download-column { min-width: 0; }
+.download-column .section-heading { min-height: 70px; }
+.torrent-source-list, .active-download-list { border-top: 1px solid var(--line); }
+.torrent-source { display: flex; align-items: center; gap: 17px; width: 100%; min-height: 86px; padding: 15px 16px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; }
+.torrent-source:hover, .torrent-source.selected, .torrent-source[data-remote-active="true"] { background: rgba(200, 245, 140, .07); }
+.torrent-source-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 1px solid rgba(200, 245, 140, .35); border-radius: 11px; color: var(--accent); font-size: 23px; }
+.torrent-source-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.torrent-source-copy strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.torrent-source-copy small { overflow: hidden; color: var(--subtle); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.torrent-source-action { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .13em; white-space: nowrap; }
+.download-empty { margin: 0; padding: 23px 15px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 14px; line-height: 1.5; }
+.season-picker { align-self: start; padding: 25px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 255, 255, .035); }
+.season-picker .section-heading { margin-bottom: 16px; }
+.season-picker h2 { overflow-wrap: anywhere; }
+.series-title-field { display: flex; flex-direction: column; gap: 9px; margin-bottom: 21px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; }
+.series-title-field input { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid rgba(219, 239, 228, .27); border-radius: 7px; background: #0b1517; color: var(--text); font-size: 15px; letter-spacing: normal; }
+.season-check-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 24px; }
+.season-check { position: relative; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 7px; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.season-check:hover { background: rgba(200, 245, 140, .06); }
+.season-check input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.season-check-mark { display: grid; place-items: center; flex: none; width: 21px; height: 21px; border: 1px solid var(--subtle); border-radius: 4px; color: transparent; font-size: 13px; }
+.season-check input:checked + .season-check-mark { border-color: var(--accent); background: var(--accent); color: #0a1611; }
+.season-check small { margin-left: auto; color: var(--subtle); font-size: 10px; white-space: nowrap; }
+.season-picker > .button { width: 100%; }
+.season-placeholder { display: flex; align-items: center; gap: 17px; min-height: 134px; padding: 14px; border: 1px dashed rgba(219, 239, 228, .21); border-radius: 8px; }
+.season-placeholder > span { color: rgba(200, 245, 140, .27); font-size: 68px; line-height: 1; }
+.season-placeholder p { max-width: 200px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.active-downloads { padding-bottom: 62px; }
+.active-download { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 13px 20px; padding: 24px 16px; border-bottom: 1px solid var(--line); }
+.active-download-title { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.active-download-title strong { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.active-download-title span { color: var(--subtle); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.download-actions { display: flex; align-items: start; gap: 8px; grid-column: 2; grid-row: 1 / 4; }
+.download-actions .button, .download-remove-confirm .button { min-height: 40px; padding: 9px 12px; font-size: 12px; }
+.download-progress { height: 5px; grid-column: 1; overflow: hidden; border-radius: 4px; background: rgba(255, 255, 255, .13); }
+.download-progress i { display: block; height: 100%; border-radius: 4px; background: var(--accent); transition: width .35s; }
+.download-progress-meta { display: flex; justify-content: space-between; gap: 15px; grid-column: 1; color: var(--muted); font-size: 12px; }
+.download-remove-confirm { display: flex; align-items: center; gap: 9px; grid-column: 1 / -1; margin-top: 8px; padding: 14px; border: 1px solid rgba(255, 180, 162, .32); border-radius: 8px; background: rgba(255, 180, 162, .07); }
+.download-remove-confirm span { flex: 1; color: #ffd4c9; font-size: 13px; line-height: 1.4; }
+.download-error { margin-bottom: 24px; padding: 15px 18px; border: 1px solid rgba(255, 180, 162, .4); border-radius: 8px; background: rgba(255, 180, 162, .09); color: #ffd4c9; font-size: 14px; }
+.download-file-section { grid-column: 1 / -1; }
+.download-file-section > .button { min-height: 38px; padding: 8px 12px; font-size: 11px; }
+.download-file-list { margin-top: 12px; border-top: 1px solid var(--line); }
+.download-file { display: flex; justify-content: space-between; gap: 18px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.download-file-name { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+.download-file-state { flex: none; max-width: 42%; color: var(--accent); text-align: right; }
+.download-file-state.is-error, .download-file-warning { color: #ffd4c9; }
+.download-file-warning { grid-column: 1 / -1; margin: 0; font-size: 12px; }

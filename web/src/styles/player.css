@@ -1,0 +1,30 @@
+.player-screen { position: fixed; inset: 0; overflow: hidden; background: #000; }
+.player-screen video { width: 100%; height: 100%; background: #000; object-fit: contain; }
+.player-vignette { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, .8), transparent 28%, transparent 58%, rgba(0, 0, 0, .85)); opacity: 0; transition: opacity .25s; }
+.player-vignette.visible { opacity: 1; }
+.player-top { position: absolute; top: 5vh; right: 5vw; left: 5vw; display: flex; align-items: center; gap: 22px; }
+.player-top h1 { margin: 7px 0 0; font-size: clamp(19px, 2vw, 30px); font-weight: 600; letter-spacing: -.04em; }
+.back-icon { display: grid; place-items: center; flex: none; width: 49px; height: 49px; border: 1px solid rgba(255, 255, 255, .38); border-radius: 50%; background: rgba(0, 0, 0, .42); color: white; font-size: 24px; }
+.playing-label { margin-left: auto; padding: 10px 13px; border: 1px solid rgba(255, 255, 255, .28); border-radius: 5px; color: #e3ebe4; font-size: 10px; font-weight: 700; letter-spacing: .16em; white-space: nowrap; }
+.player-controls { position: absolute; right: 5vw; bottom: 6vh; left: 5vw; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.player-controls.visible { opacity: 1; pointer-events: auto; }
+.play-row { display: flex; align-items: center; gap: 17px; color: white; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.play-row > button { flex: none; width: 49px; height: 49px; border: 1px solid rgba(255, 255, 255, .5); border-radius: 50%; background: rgba(0, 0, 0, .5); color: white; font-size: 16px; }
+.timeline-control { position: relative; display: flex; align-items: center; flex: 1; min-width: 80px; height: 40px; cursor: pointer; }
+.progress-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .38); }
+.progress-fill { position: relative; height: 100%; border-radius: 3px; background: var(--accent); }
+.progress-fill::after { content: ''; position: absolute; top: -5px; right: -7px; width: 15px; height: 15px; border-radius: 50%; background: white; box-shadow: 0 0 0 4px rgba(200, 245, 140, .26); }
+.seek-preview { position: absolute; z-index: 2; bottom: 100%; display: flex; flex-direction: column; align-items: center; gap: 7px; padding-bottom: 10px; pointer-events: none; transform: translateX(-50%); }
+.seek-preview-frame { width: 240px; height: 135px; border: 2px solid white; border-radius: 6px; background: #142021 center / cover no-repeat; box-shadow: 0 10px 30px #000; }
+.seek-preview-frame img { width: 100%; height: 100%; object-fit: cover; }
+.seek-preview > span { padding: 5px 9px; border-radius: 4px; background: rgba(0, 0, 0, .88); color: white; font-size: 12px; }
+.remote-hint { margin-left: 20px; color: #c1cdc4; font-size: 10px; letter-spacing: .06em; }
+.center-action { position: absolute; inset: 0; display: grid; place-items: center; }
+.center-action .button { min-height: 64px; padding: 18px 29px; font-size: 18px; }
+.player-message, .next-card { position: absolute; top: 50%; left: 50%; width: min(500px, 88vw); padding: 34px; border: 1px solid rgba(255, 255, 255, .23); border-radius: 14px; background: rgba(12, 21, 23, .96); box-shadow: 0 25px 90px #000; text-align: center; transform: translate(-50%, -50%); }
+.player-message h2, .next-card h2 { margin: 12px 0 8px; font-size: 30px; font-weight: 600; letter-spacing: -.05em; }
+.player-message p, .next-card p { margin: 0 0 23px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.action-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 11px; }
+.next-card { top: auto; right: 5vw; bottom: 12vh; left: auto; width: min(420px, 88vw); padding: 28px; text-align: left; transform: none; }
+.next-card h2 { font-size: 26px; }
+.next-card .action-row { justify-content: flex-start; }

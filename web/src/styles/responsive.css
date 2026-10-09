@@ -1,0 +1,75 @@
+@media (max-width: 1100px) {
+  .series-grid, .continue-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .download-content { grid-template-columns: 1fr; }
+  .remote-hint { display: none; }
+}
+
+@media (max-width: 700px) {
+  .app-shell { padding-right: 20px; padding-left: 20px; }
+  .topbar { min-height: 72px; gap: 12px; }
+  .brand { font-size: 13px; gap: 8px; }
+  .brand-icon { width: 30px; height: 30px; font-size: 17px; }
+  .topbar-meta { display: none; }
+  .back-button, .header-downloads { margin-left: auto; }
+  .button { min-height: 44px; padding: 10px 14px; font-size: 12px; }
+  .welcome-row { padding: 40px 0 28px; }
+  .welcome-row h1 { font-size: clamp(42px, 9vw, 60px); }
+  .library-count { min-width: 75px; padding-left: 12px; }
+  .library-count strong { font-size: 25px; }
+  .library-count span { max-width: 70px; text-align: right; white-space: normal; font-size: 8px; }
+  .feature-card { min-height: 300px; margin-bottom: 40px; padding: 26px; background-position: 60% center; }
+  .feature-copy { max-width: 100%; }
+  .feature-copy h2 { font-size: 40px; }
+  .feature-copy p { font-size: 13px; }
+  .feature-index { display: none; }
+  .series-grid, .continue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .continue-section { padding-bottom: 40px; }
+  .continue-copy { min-height: 94px; padding: 12px; }
+  .continue-copy strong { font-size: 14px; }
+  .continue-copy span { font-size: 10px; }
+  .card-copy { min-height: 74px; padding: 12px 25px 12px 12px; }
+  .card-copy strong { font-size: 14px; }
+  .card-copy > span { font-size: 9px; }
+  .card-arrow { right: 11px; bottom: 14px; }
+  .footer-note { flex-wrap: wrap; font-size: 8px; }
+  .footer-note span:nth-child(2) { display: none; }
+  .series-hero { min-height: 225px; margin-right: -20px; margin-left: -20px; padding: 32px 20px; }
+  .series-hero h1 { font-size: 44px; }
+  .hero-copy { max-width: 100%; }
+  .hero-index { display: none; }
+  .episode-section { padding: 32px 0 45px; }
+  .episode-row { grid-template-columns: 76px minmax(0, 1fr) 28px; gap: 10px; min-height: 93px; padding: 11px 4px; }
+  .episode-info strong { font-size: 15px; }
+  .episode-info .eyebrow { font-size: 8px; }
+  .episode-info > span:last-child:not(.episode-progress) { font-size: 10px; }
+  .episode-duration { display: none; }
+  .episode-play { width: 28px; height: 28px; font-size: 9px; }
+  .download-heading { padding: 36px 0 32px; }
+  .download-heading p { font-size: 14px; }
+  .download-content { gap: 32px; }
+  .season-picker { padding: 18px; }
+  .torrent-source-action { display: none; }
+  .download-actions { grid-column: 1 / -1; grid-row: auto; }
+  .download-progress { grid-column: 1 / -1; }
+  .download-progress-meta { grid-column: 1 / -1; }
+  .download-remove-confirm { flex-wrap: wrap; }
+  .download-remove-confirm span { flex-basis: 100%; }
+  .torrent-series-source { align-items: flex-start; flex-direction: column; }
+  .torrent-season-actions { justify-content: flex-start; }
+  .download-file { flex-direction: column; gap: 5px; }
+  .download-file-state { max-width: none; text-align: left; }
+  .player-top { top: 18px; right: 18px; left: 18px; gap: 11px; }
+  .player-top h1 { font-size: 16px; }
+  .player-top .eyebrow { font-size: 8px; }
+  .back-icon { width: 40px; height: 40px; }
+  .playing-label { display: none; }
+  .player-controls { right: 18px; bottom: 25px; left: 18px; }
+  .play-row { gap: 10px; font-size: 11px; }
+  .play-row > button { width: 40px; height: 40px; }
+  .seek-preview-frame { width: 180px; height: 101px; }
+  .next-card { right: 18px; bottom: 24px; left: 18px; width: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
