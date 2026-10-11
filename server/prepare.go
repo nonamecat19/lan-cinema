@@ -15,60 +15,77 @@ import (
 )
 
 func cachePath(cacheDir, id, fingerprint string) string {
-	return filepath.Join(cacheDir, id+"-"+fingerprint+".mp4")
+	return filepath.Join(cacheDir, id+"-v2-"+fingerprint+".mp4")
 }
 
 func prepareEpisode(episode *Episode, cacheDir string) error {
 	return prepareEpisodeWithStatus(episode, cacheDir, nil)
 }
 
-func prepareEpisodeWithStatus(episode *Episode, cacheDir string, update func(string, int)) error {
-	report := func(stage string, progress int) {
-		if update != nil {
-			update(stage, progress)
-		}
-	}
+type preparationPlan struct {
+	media     mediaInfo
+	finalPath string
+}
+
+func inspectEpisode(episode *Episode, cacheDir string) (preparationPlan, bool, error) {
 	if episode.UnavailableReason != nil {
-		return fmt.Errorf("%s", *episode.UnavailableReason)
+		return preparationPlan{}, false, fmt.Errorf("%s", *episode.UnavailableReason)
 	}
 	info, err := os.Lstat(episode.SourcePath)
 	if err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("Source file is unavailable")
+		return preparationPlan{}, false, fmt.Errorf("Source file is unavailable")
 	}
-	duration, compatible, hasAudio, err := probe(episode.SourcePath)
+	media, err := probe(episode.SourcePath)
 	if err != nil {
-		return err
+		return preparationPlan{}, false, err
 	}
-	fastStartNeeded := true
-	if compatible {
-		fastStartNeeded, err = needsFastStart(episode.SourcePath)
+	if media.H264 && media.AAC && media.MP4 {
+		fastStartNeeded, err := needsFastStart(episode.SourcePath)
+		if err != nil {
+			return preparationPlan{}, false, err
+		}
+		if !fastStartNeeded {
+			episode.DurationSeconds = &media.Duration
+			episode.PlaybackPath = episode.SourcePath
+			episode.Status = "ready"
+			return preparationPlan{}, true, nil
+		}
 	}
-	if err != nil {
-		return err
-	}
-	if !fastStartNeeded {
-		episode.DurationSeconds = &duration
-		episode.PlaybackPath = episode.SourcePath
-		episode.Status = "ready"
-		return nil
-	}
-	report("Checking prepared cache", 0)
 	finger, err := fingerprint(episode.SourcePath)
 	if err != nil {
-		return fmt.Errorf("Source file is unavailable")
+		return preparationPlan{}, false, fmt.Errorf("Source file is unavailable")
 	}
 	finalPath := cachePath(cacheDir, episode.ID, finger)
 	if _, err := os.Stat(finalPath); err == nil {
-		cachedDuration, cacheCompatible, _, probeErr := probe(finalPath)
-		cacheNeedsFastStart, atomErr := needsFastStart(finalPath)
-		if probeErr == nil && cacheCompatible && atomErr == nil && !cacheNeedsFastStart {
-			episode.DurationSeconds = &cachedDuration
-			episode.PlaybackPath = finalPath
-			episode.Status = "ready"
-			return nil
+		cached, probeErr := probe(finalPath)
+		if probeErr == nil && cached.H264 && cached.AAC && cached.MP4 {
+			cacheNeedsFastStart, atomErr := needsFastStart(finalPath)
+			if atomErr == nil && !cacheNeedsFastStart {
+				episode.DurationSeconds = &cached.Duration
+				episode.PlaybackPath = finalPath
+				episode.Status = "ready"
+				return preparationPlan{}, true, nil
+			}
 		}
 		if err := os.Remove(finalPath); err != nil {
-			return fmt.Errorf("Unable to replace invalid cache entry")
+			return preparationPlan{}, false, fmt.Errorf("Unable to replace invalid cache entry")
+		}
+	}
+	return preparationPlan{media: media, finalPath: finalPath}, false, nil
+}
+
+func prepareEpisodeWithStatus(episode *Episode, cacheDir string, update func(string, int)) error {
+	plan, ready, err := inspectEpisode(episode, cacheDir)
+	if err != nil || ready {
+		return err
+	}
+	return convertEpisode(episode, cacheDir, plan, update)
+}
+
+func convertEpisode(episode *Episode, cacheDir string, plan preparationPlan, update func(string, int)) error {
+	report := func(stage string, progress int) {
+		if update != nil {
+			update(stage, progress)
 		}
 	}
 	temporary, err := os.CreateTemp(cacheDir, episode.ID+"-*.tmp")
@@ -82,20 +99,24 @@ func prepareEpisodeWithStatus(episode *Episode, cacheDir string, update func(str
 	}
 	defer os.Remove(temporaryPath)
 	args := []string{"-v", "error", "-y", "-i", episode.SourcePath}
-	if !hasAudio {
+	if !plan.media.HasAudio {
 		args = append(args, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000")
 	}
 	args = append(args, "-map", "0:v:0")
-	if hasAudio {
+	if plan.media.HasAudio {
 		args = append(args, "-map", "0:a:0")
 	} else {
 		args = append(args, "-map", "1:a:0", "-shortest")
 	}
-	if compatible {
-		args = append(args, "-c", "copy")
-	} else {
-		args = append(args, "-c:v", "libx264", "-c:a", "aac")
+	videoCodec := "libx264"
+	if plan.media.H264 {
+		videoCodec = "copy"
 	}
+	audioCodec := "aac"
+	if plan.media.AAC {
+		audioCodec = "copy"
+	}
+	args = append(args, "-c:v", videoCodec, "-c:a", audioCodec)
 	args = append(args, "-movflags", "+faststart", "-f", "mp4", temporaryPath)
 	args = append([]string{"-nostats", "-progress", "pipe:1"}, args...)
 	command := exec.Command("ffmpeg", args...)
@@ -109,7 +130,7 @@ func prepareEpisodeWithStatus(episode *Episode, cacheDir string, update func(str
 		return fmt.Errorf("Unable to prepare MP4 for streaming")
 	}
 	stage := "Converting video"
-	if compatible {
+	if plan.media.H264 {
 		stage = "Remuxing MP4"
 	}
 	report(stage, 0)
@@ -117,14 +138,14 @@ func prepareEpisodeWithStatus(episode *Episode, cacheDir string, update func(str
 	lastProgress := 0
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "out_time_us=") || duration <= 0 {
+		if !strings.HasPrefix(line, "out_time_us=") || plan.media.Duration <= 0 {
 			continue
 		}
 		microseconds, err := strconv.ParseInt(strings.TrimPrefix(line, "out_time_us="), 10, 64)
 		if err != nil {
 			continue
 		}
-		progress := int(microseconds * 100 / (duration * 1000000))
+		progress := int(microseconds * 100 / (plan.media.Duration * 1000000))
 		if progress > 99 {
 			progress = 99
 		}
@@ -140,16 +161,16 @@ func prepareEpisodeWithStatus(episode *Episode, cacheDir string, update func(str
 		return fmt.Errorf("Unable to prepare MP4 for streaming")
 	}
 	report("Validating playback", 99)
-	cachedDuration, cacheCompatible, _, err := probe(temporaryPath)
+	cached, err := probe(temporaryPath)
 	preparedNeedsFastStart, atomErr := needsFastStart(temporaryPath)
-	if err != nil || !cacheCompatible || atomErr != nil || preparedNeedsFastStart {
+	if err != nil || !cached.H264 || !cached.AAC || atomErr != nil || preparedNeedsFastStart {
 		return fmt.Errorf("Prepared MP4 failed validation")
 	}
-	if err := os.Rename(temporaryPath, finalPath); err != nil {
+	if err := os.Rename(temporaryPath, plan.finalPath); err != nil {
 		return fmt.Errorf("Unable to save prepared MP4")
 	}
-	episode.DurationSeconds = &cachedDuration
-	episode.PlaybackPath = finalPath
+	episode.DurationSeconds = &cached.Duration
+	episode.PlaybackPath = plan.finalPath
 	episode.Status = "ready"
 	return nil
 }
@@ -208,17 +229,6 @@ func prepareCatalog(catalog *Catalog, files []episodeFile, cacheDir string) {
 					failures.Unlock()
 					continue
 				}
-				if err := preparePreview(episode, cacheDir); err != nil {
-					log.Printf("episode %s preview unavailable: %s", episode.ID, err.Error())
-				}
-				if episode.PreviewPath != "" {
-					url := "/api/episodes/" + episode.ID + "/preview"
-					episode.PreviewURL = &url
-				}
-				if episode.PreviewSpritePath != "" {
-					url := "/api/episodes/" + episode.ID + "/preview-sheet"
-					episode.PreviewSpriteURL = &url
-				}
 				if err := prepareEpisode(episode, cacheDir); err != nil {
 					reason := err.Error()
 					episode.Status = "unavailable"
@@ -243,6 +253,38 @@ func prepareCatalog(catalog *Catalog, files []episodeFile, cacheDir string) {
 		}
 	}
 	close(jobs)
+	workers.Wait()
+	previewJobs := make(chan *Episode)
+	for i := 0; i < 2; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for episode := range previewJobs {
+				if err := preparePreview(episode, cacheDir); err != nil {
+					log.Printf("episode %s preview unavailable: %s", episode.ID, err.Error())
+				}
+				if episode.PreviewPath != "" {
+					url := "/api/episodes/" + episode.ID + "/preview"
+					episode.PreviewURL = &url
+				}
+				if episode.PreviewSpritePath != "" {
+					url := "/api/episodes/" + episode.ID + "/preview-sheet"
+					episode.PreviewSpriteURL = &url
+				}
+			}
+		}()
+	}
+	for i := range catalog.Series {
+		for j := range catalog.Series[i].Seasons {
+			for k := range catalog.Series[i].Seasons[j].Episodes {
+				episode := &catalog.Series[i].Seasons[j].Episodes[k]
+				if episode.Status == "ready" {
+					previewJobs <- episode
+				}
+			}
+		}
+	}
+	close(previewJobs)
 	workers.Wait()
 }
 

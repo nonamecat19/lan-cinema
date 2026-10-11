@@ -43,10 +43,11 @@ func preparePreview(episode *Episode, cacheDir string) error {
 	if err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("Source file is unavailable")
 	}
-	duration, _, _, err := probe(episode.SourcePath)
+	media, err := probe(episode.SourcePath)
 	if err != nil {
 		return err
 	}
+	duration := media.Duration
 	finger, err := fingerprint(episode.SourcePath)
 	if err != nil {
 		return fmt.Errorf("Source file is unavailable")

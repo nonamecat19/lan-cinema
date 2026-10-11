@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type probeResult struct {
@@ -15,33 +17,48 @@ type probeResult struct {
 	} `json:"streams"`
 	Format struct {
 		Duration string `json:"duration"`
+		Name     string `json:"format_name"`
 	} `json:"format"`
 }
 
-func probe(path string) (int64, bool, bool, error) {
-	command := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name:format=duration", "-of", "json", path)
+type mediaInfo struct {
+	Duration int64
+	H264     bool
+	AAC      bool
+	HasAudio bool
+	MP4      bool
+}
+
+func probe(path string) (mediaInfo, error) {
+	command := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name:format=duration,format_name", "-of", "json", path)
 	output, err := command.Output()
 	if err != nil {
-		return 0, false, false, fmt.Errorf("FFprobe failed")
+		return mediaInfo{}, fmt.Errorf("FFprobe failed")
 	}
 	var result probeResult
 	if err := json.Unmarshal(output, &result); err != nil {
-		return 0, false, false, fmt.Errorf("FFprobe returned invalid data")
+		return mediaInfo{}, fmt.Errorf("FFprobe returned invalid data")
 	}
-	video, audio := false, false
+	info := mediaInfo{}
+	seenVideo := false
 	for _, stream := range result.Streams {
-		if stream.CodecType == "video" && stream.CodecName == "h264" {
-			video = true
+		if stream.CodecType == "video" && !seenVideo {
+			seenVideo = true
+			info.H264 = stream.CodecName == "h264"
 		}
-		if stream.CodecType == "audio" && stream.CodecName == "aac" {
-			audio = true
+		if stream.CodecType == "audio" && !info.HasAudio {
+			info.HasAudio = true
+			info.AAC = stream.CodecName == "aac"
 		}
 	}
 	duration, err := strconv.ParseFloat(result.Format.Duration, 64)
 	if err != nil || duration <= 0 {
-		return 0, false, false, fmt.Errorf("Invalid media duration")
+		return mediaInfo{}, fmt.Errorf("Invalid media duration")
 	}
-	return int64(duration + 0.5), video && audio, audio, nil
+	info.Duration = int64(duration + 0.5)
+	extension := strings.ToLower(filepath.Ext(path))
+	info.MP4 = (extension == ".mp4" || extension == ".m4v") && strings.Contains(result.Format.Name, "mp4")
+	return info, nil
 }
 
 func needsFastStart(path string) (bool, error) {

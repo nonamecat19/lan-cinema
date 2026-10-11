@@ -4,6 +4,8 @@ import (
 	"log"
 )
 
+var previewSlots = make(chan struct{}, 2)
+
 func cloneCatalog(source *Catalog) *Catalog {
 	copyCatalog := &Catalog{Series: make([]Series, len(source.Series)), byID: make(map[string]*Episode), count: source.count, failures: source.failures}
 	for i, series := range source.Series {
@@ -106,23 +108,31 @@ func (app *App) publishEpisode(episode Episode) {
 }
 
 func (app *App) runPreparation(episode Episode) {
-	app.prepareSlots <- struct{}{}
 	defer func() {
-		<-app.prepareSlots
 		app.catalogMu.Lock()
 		if app.active[episode.ID] == episode.Fingerprint {
 			delete(app.active, episode.ID)
 		}
 		app.catalogMu.Unlock()
 	}()
-	episode.Status = "preparing"
 	update := func(stage string, progress int) {
 		episode.PreparationStage = stage
 		episode.PreparationProgress = progress
 		app.publishEpisode(episode)
 	}
+	episode.Status = "preparing"
 	update("Probing media", 0)
-	if err := prepareEpisodeWithStatus(&episode, app.cacheDir, update); err != nil {
+	plan, ready, err := inspectEpisode(&episode, app.cacheDir)
+	if err == nil && !ready {
+		episode.Status = "queued"
+		update("Waiting to convert", 0)
+		app.prepareSlots <- struct{}{}
+		episode.Status = "preparing"
+		update("Converting video", 0)
+		err = convertEpisode(&episode, app.cacheDir, plan, update)
+		<-app.prepareSlots
+	}
+	if err != nil {
 		reason := err.Error()
 		episode.Status = "unavailable"
 		episode.PreparationStage = "Preparation failed"
@@ -136,6 +146,8 @@ func (app *App) runPreparation(episode Episode) {
 	streamURL := "/api/episodes/" + episode.ID + "/stream"
 	episode.StreamURL = &streamURL
 	app.publishEpisode(episode)
+	previewSlots <- struct{}{}
+	defer func() { <-previewSlots }()
 	if err := preparePreview(&episode, app.cacheDir); err != nil {
 		log.Printf("episode %s preview unavailable: %s", episode.ID, err.Error())
 	}
