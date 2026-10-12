@@ -51,7 +51,7 @@ docker compose logs -f tv
 
 Open **Downloads** in the app to upload a `.torrent` file from your device or select one from the project root or `TORRENT_EXTRA_HOST_PATH`, inspect its contents, choose seasons, and start, pause, or remove transfers. Removing a transfer deletes its qBittorrent staging data while imported episodes stay in the media library. Uploaded torrent files persist in `./cache/torrent-uploads` and are limited to 8 MB. The app imports each completed video into the matching series and season folder in `MEDIA_HOST_PATH`, preserving qBittorrent's original files for seeding. It prepares imported MKV and other supported video files for browser playback and refreshes the catalog automatically.
 
-The Downloads page shows transfer state and per-episode download, import, and preparation status. A series imported from a selected torrent shows that torrent on its series page. If the torrent contains seasons that have not been selected, use **More seasons** there to add them to the existing transfer.
+The Downloads page shows transfer state and per-episode download, waiting import, active copy progress, import errors, and media preparation status. Import errors remain visible after a restart and clear when a later attempt succeeds. A series imported from a selected torrent shows that torrent on its series page. If the torrent contains seasons that have not been selected, use **More seasons** there to add them to the existing transfer.
 
 Put additional `.torrent` files beside `compose.yaml`, then reload the Downloads screen. Torrent data and client settings persist in `./downloads` and `./qbt-config`. The qBittorrent WebUI is not published on the host. TCP and UDP port `6881` are published for peer connections; allow them through the host firewall if downloads need incoming peers.
 
@@ -81,3 +81,5 @@ Stop the app with `docker compose down`.
 Run `go test -race ./...` for backend checks. In `web`, run `npm test` for remote navigation tests and `npm run build` for strict TypeScript checking and the production bundle.
 
 The remote uses arrows or digits 2/4/6/8 to move, OK or 5 to select, and Back or 0 to return. The selected season and focused episode are restored when returning from playback.
+
+The player requests browser fullscreen after an episode is selected. If the TV browser rejects fullscreen, it remains usable in the viewport. Follow the [TV acceptance procedure](spec/04-verification.md#tv-acceptance) on the intended TV and record the results; automated tests do not verify physical remote behavior or the three-second first-frame target.

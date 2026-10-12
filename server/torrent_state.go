@@ -13,6 +13,7 @@ func (manager *TorrentManager) loadState() {
 	var state struct {
 		Selections map[string]TorrentSelection `json:"selections"`
 		Imported   map[string]bool             `json:"imported"`
+		Errors     map[string]string           `json:"importErrors"`
 	}
 	if json.Unmarshal(data, &state) == nil {
 		if state.Selections != nil {
@@ -21,6 +22,9 @@ func (manager *TorrentManager) loadState() {
 		if state.Imported != nil {
 			manager.imported = state.Imported
 		}
+		if state.Errors != nil {
+			manager.importErrors = state.Errors
+		}
 	}
 }
 
@@ -28,7 +32,8 @@ func (manager *TorrentManager) saveStateLocked() {
 	data, err := json.Marshal(struct {
 		Selections map[string]TorrentSelection `json:"selections"`
 		Imported   map[string]bool             `json:"imported"`
-	}{Selections: manager.selections, Imported: manager.imported})
+		Errors     map[string]string           `json:"importErrors"`
+	}{Selections: manager.selections, Imported: manager.imported, Errors: manager.importErrors})
 	if err != nil {
 		return
 	}

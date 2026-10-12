@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -90,6 +91,8 @@ type TorrentManager struct {
 	selections   map[string]TorrentSelection
 	imported     map[string]bool
 	importErrors map[string]string
+	importing    map[string]int
+	linkSource   func(string, string) error
 }
 
 type qbitFile struct {
@@ -128,7 +131,7 @@ var torrentSeasonPattern = regexp.MustCompile(`(?i)^(?:Season\s*|S)([0-9]{1,3})$
 var torrentNoisePattern = regexp.MustCompile(`(?i)(?:web[-_. ]?dlrip|bdrip|brrip|webrip|hdtv|1080p|720p|2160p|x264|x265|h264|h265|aac|hevc|proper|repack|eng|ukr|rus|mkv|mp4)`)
 
 func NewTorrentManager(root, extraRoot, mediaRoot, downloads, baseURL, statePath string) *TorrentManager {
-	manager := &TorrentManager{root: root, extraRoot: extraRoot, uploadRoot: filepath.Join(filepath.Dir(statePath), "torrent-uploads"), mediaRoot: mediaRoot, downloads: downloads, baseURL: strings.TrimRight(baseURL, "/"), statePath: statePath, client: &http.Client{Timeout: 20 * time.Second}, selections: make(map[string]TorrentSelection), imported: make(map[string]bool), importErrors: make(map[string]string)}
+	manager := &TorrentManager{root: root, extraRoot: extraRoot, uploadRoot: filepath.Join(filepath.Dir(statePath), "torrent-uploads"), mediaRoot: mediaRoot, downloads: downloads, baseURL: strings.TrimRight(baseURL, "/"), statePath: statePath, client: &http.Client{Timeout: 20 * time.Second}, selections: make(map[string]TorrentSelection), imported: make(map[string]bool), importErrors: make(map[string]string), importing: make(map[string]int)}
 	_ = os.MkdirAll(manager.uploadRoot, 0755)
 	manager.loadState()
 	return manager
@@ -281,7 +284,8 @@ func (manager *TorrentManager) Start(id string, selection TorrentSelection) erro
 	}
 	selected := make([]int, 0)
 	for _, file := range files {
-		if file.Season > 0 && seasons[file.Season] && supportedTorrentVideo(file.Name) {
+		season, _, _, err := parseTorrentEpisode(file.Name)
+		if err == nil && season == file.Season && seasons[season] && supportedTorrentVideo(file.Name) {
 			selected = append(selected, file.Index)
 		}
 	}
@@ -443,6 +447,12 @@ func (manager *TorrentManager) Downloads(catalog *Catalog) ([]TorrentDownload, e
 				importErrors[key] = value
 			}
 		}
+		importing := make(map[string]int, len(manager.importing))
+		for key, value := range manager.importing {
+			if strings.HasPrefix(key, info.Hash+":") {
+				importing[key] = value
+			}
+		}
 		manager.mu.Unlock()
 		for _, file := range files {
 			if file.Priority == 0 || !supportedTorrentVideo(file.Name) {
@@ -459,9 +469,14 @@ func (manager *TorrentManager) Downloads(catalog *Catalog) ([]TorrentDownload, e
 			} else if file.Progress == 0 {
 				item.Status, item.Detail = "queued", "Waiting for peers"
 			} else if file.Progress >= 0.999999 {
-				item.Status, item.Detail = "importing", "Waiting to import into the library"
+				item.Status, item.Detail = "queued", "Waiting to import into the library"
 				if reason := importErrors[key]; reason != "" {
 					item.Status, item.Detail = "import-error", reason
+				} else if progress, active := importing[key]; active {
+					item.Status, item.Detail = "importing", "Importing into the library"
+					if progress > 0 {
+						item.Detail = fmt.Sprintf("Copying into the library · %d%%", progress)
+					}
 				} else if imported[key] {
 					item.Status, item.Detail = "queued", "Waiting for media preparation"
 					if found := findCatalogEpisode(catalog, selection.SeriesTitle, season, episodeNumber); found != nil {
@@ -543,6 +558,11 @@ func (manager *TorrentManager) Delete(hash string) error {
 			delete(manager.importErrors, key)
 		}
 	}
+	for key := range manager.importing {
+		if strings.HasPrefix(key, hash+":") {
+			delete(manager.importing, key)
+		}
+	}
 	for key := range manager.imported {
 		if strings.HasPrefix(key, hash+":") {
 			delete(manager.imported, key)
@@ -591,24 +611,31 @@ func (manager *TorrentManager) importCompleted() bool {
 			manager.mu.Lock()
 			wasImported := manager.imported[key]
 			manager.mu.Unlock()
-			if wasImported || file.Progress < 0.999999 || file.Priority == 0 || !supportedTorrentVideo(file.Name) || file.Season == 0 {
+			season, _, _, parseErr := parseTorrentEpisode(file.Name)
+			if wasImported || file.Progress < 0.999999 || file.Priority == 0 || !supportedTorrentVideo(file.Name) || parseErr != nil || season != file.Season {
 				continue
 			}
+			manager.mu.Lock()
+			manager.importing[key] = 0
+			delete(manager.importErrors, key)
+			manager.saveStateLocked()
+			manager.mu.Unlock()
 			source, err := manager.torrentFilePath(hash, file, info)
 			if err != nil {
-				manager.mu.Lock()
-				manager.importErrors[key] = "Completed file is unavailable for import"
-				manager.mu.Unlock()
+				manager.finishImport(key, "Completed file is unavailable in the download directory")
 				continue
 			}
-			if err := manager.importFileFromPath(file, selection.SeriesTitle, source); err != nil {
+			if err := manager.importFileFromPathWithProgress(file, selection.SeriesTitle, source, func(progress int) {
 				manager.mu.Lock()
-				manager.importErrors[key] = "Could not import the completed file"
+				manager.importing[key] = progress
 				manager.mu.Unlock()
+			}); err != nil {
+				manager.finishImport(key, importFailureDetail(err))
 				continue
 			}
 			manager.mu.Lock()
 			manager.imported[key] = true
+			delete(manager.importing, key)
 			delete(manager.importErrors, key)
 			manager.saveStateLocked()
 			manager.mu.Unlock()
@@ -616,6 +643,31 @@ func (manager *TorrentManager) importCompleted() bool {
 		}
 	}
 	return changed
+}
+
+func (manager *TorrentManager) finishImport(key, detail string) {
+	manager.mu.Lock()
+	delete(manager.importing, key)
+	manager.importErrors[key] = detail
+	manager.saveStateLocked()
+	manager.mu.Unlock()
+}
+
+func importFailureDetail(err error) string {
+	switch {
+	case errors.Is(err, syscall.ENOSPC):
+		return "Not enough disk space to import the completed file"
+	case errors.Is(err, os.ErrPermission):
+		return "Media library is not writable"
+	case errors.Is(err, os.ErrNotExist):
+		return "Completed file disappeared during import"
+	case strings.Contains(err.Error(), "torrent file path is invalid"):
+		return "Torrent file is outside the download directory"
+	case strings.Contains(err.Error(), "existing library episode"):
+		return "Existing library episode differs from the completed file"
+	default:
+		return "Could not import the completed file"
+	}
 }
 
 func (manager *TorrentManager) importFile(hash string, file TorrentFile, seriesTitle string) error {
@@ -659,6 +711,10 @@ func (manager *TorrentManager) torrentFilePath(hash string, file TorrentFile, in
 }
 
 func (manager *TorrentManager) importFileFromPath(file TorrentFile, seriesTitle, source string) error {
+	return manager.importFileFromPathWithProgress(file, seriesTitle, source, nil)
+}
+
+func (manager *TorrentManager) importFileFromPathWithProgress(file TorrentFile, seriesTitle, source string, progress func(int)) error {
 	season, episode, title, err := parseTorrentEpisode(file.Name)
 	if err != nil {
 		return err
@@ -667,9 +723,6 @@ func (manager *TorrentManager) importFileFromPath(file TorrentFile, seriesTitle,
 	target := filepath.Join(manager.mediaRoot, relative)
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
-	}
-	if _, err := os.Stat(target); err == nil {
-		return nil
 	}
 	if !pathWithin(manager.downloads, source) {
 		return fmt.Errorf("torrent file path is invalid")
@@ -686,7 +739,19 @@ func (manager *TorrentManager) importFileFromPath(file TorrentFile, seriesTitle,
 	if err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("torrent file is not regular")
 	}
-	if err := os.Link(resolvedSource, target); err == nil {
+	if existing, err := os.Stat(target); err == nil {
+		if existing.Mode().IsRegular() && existing.Size() == info.Size() {
+			return nil
+		}
+		return fmt.Errorf("existing library episode differs from completed file")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	linkSource := manager.linkSource
+	if linkSource == nil {
+		linkSource = os.Link
+	}
+	if err := linkSource(resolvedSource, target); err == nil {
 		return nil
 	}
 	input, err := os.Open(resolvedSource)
@@ -694,18 +759,58 @@ func (manager *TorrentManager) importFileFromPath(file TorrentFile, seriesTitle,
 		return err
 	}
 	defer input.Close()
-	output, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	output, err := os.CreateTemp(filepath.Dir(target), ".import-*")
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(output, input)
+	defer os.Remove(output.Name())
+	if err := output.Chmod(0644); err != nil {
+		output.Close()
+		return err
+	}
+	copyTarget := io.Writer(output)
+	if progress != nil && info.Size() > 0 {
+		copyTarget = &importProgressWriter{writer: output, size: info.Size(), update: progress}
+	}
+	_, copyErr := io.Copy(copyTarget, input)
 	closeErr := output.Close()
 	if copyErr != nil || closeErr != nil {
-		os.Remove(target)
 		if copyErr != nil {
 			return copyErr
 		}
 		return closeErr
 	}
+	if err := os.Link(output.Name(), target); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			existing, statErr := os.Stat(target)
+			if statErr == nil && existing.Mode().IsRegular() && existing.Size() == info.Size() {
+				return nil
+			}
+			return fmt.Errorf("existing library episode differs from completed file")
+		}
+		return err
+	}
 	return nil
+}
+
+type importProgressWriter struct {
+	writer  io.Writer
+	size    int64
+	written int64
+	last    int
+	update  func(int)
+}
+
+func (writer *importProgressWriter) Write(data []byte) (int, error) {
+	n, err := writer.writer.Write(data)
+	writer.written += int64(n)
+	percent := int(writer.written * 100 / writer.size)
+	if percent > 100 {
+		percent = 100
+	}
+	if percent != writer.last {
+		writer.last = percent
+		writer.update(percent)
+	}
+	return n, err
 }
