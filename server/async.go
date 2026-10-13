@@ -4,7 +4,8 @@ import (
 	"log"
 )
 
-var previewSlots = make(chan struct{}, 2)
+var inspectionSlots = make(chan struct{}, 2)
+var previewSlots = make(chan struct{}, 1)
 
 func cloneCatalog(source *Catalog) *Catalog {
 	copyCatalog := &Catalog{Series: make([]Series, len(source.Series)), byID: make(map[string]*Episode), count: source.count, failures: source.failures}
@@ -120,9 +121,11 @@ func (app *App) runPreparation(episode Episode) {
 		episode.PreparationProgress = progress
 		app.publishEpisode(episode)
 	}
+	inspectionSlots <- struct{}{}
 	episode.Status = "preparing"
 	update("Probing media", 0)
 	plan, ready, err := inspectEpisode(&episode, app.cacheDir)
+	<-inspectionSlots
 	if err == nil && !ready {
 		episode.Status = "queued"
 		update("Waiting to convert", 0)

@@ -175,22 +175,35 @@ func TestRefreshMakesDirectAndCachedEpisodesReadyWithoutPreparationSlots(t *test
 	}
 	app := NewApp(t.TempDir())
 	app.ConfigureLibrary(media, cache, nil)
+	inspectionSlots <- struct{}{}
+	inspectionSlots <- struct{}{}
 	app.prepareSlots <- struct{}{}
 	app.prepareSlots <- struct{}{}
 	previewSlots <- struct{}{}
-	previewSlots <- struct{}{}
+	inspectionReleased := false
 	released := false
 	defer func() {
+		if !inspectionReleased {
+			<-inspectionSlots
+			<-inspectionSlots
+		}
 		if !released {
 			<-app.prepareSlots
 			<-app.prepareSlots
-			<-previewSlots
 			<-previewSlots
 		}
 	}()
 	if err := app.RefreshCatalog(); err != nil {
 		t.Fatal(err)
 	}
+	for _, file := range files {
+		if status := app.catalog.Load().byID[file.id].Status; status != "queued" {
+			t.Fatalf("episode started inspection without capacity: %s", status)
+		}
+	}
+	<-inspectionSlots
+	<-inspectionSlots
+	inspectionReleased = true
 	deadline := time.After(5 * time.Second)
 	for {
 		catalog := app.catalog.Load()
@@ -212,7 +225,6 @@ func TestRefreshMakesDirectAndCachedEpisodesReadyWithoutPreparationSlots(t *test
 	<-app.prepareSlots
 	<-app.prepareSlots
 	<-previewSlots
-	<-previewSlots
 	released = true
 	completion := time.After(5 * time.Second)
 	for {
@@ -228,7 +240,7 @@ func TestRefreshMakesDirectAndCachedEpisodesReadyWithoutPreparationSlots(t *test
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	if len(previewSlots) != 0 {
-		t.Fatalf("preview capacity was not released: %d", len(previewSlots))
+	if len(previewSlots) != 0 || len(inspectionSlots) != 0 {
+		t.Fatalf("media capacity was not released: preview=%d inspection=%d", len(previewSlots), len(inspectionSlots))
 	}
 }
