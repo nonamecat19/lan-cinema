@@ -5,7 +5,7 @@ export function allEpisodes(series: Series): EpisodeWithSeason[] {
 }
 
 export function nextReadyEpisode(series: Series, currentId: string): EpisodeWithSeason | null {
-  const episodes = allEpisodes(series)
+  const episodes = allEpisodes(series).sort((a, b) => a.seasonNumber - b.seasonNumber || a.number - b.number || a.id.localeCompare(b.id))
   const index = episodes.findIndex((episode) => episode.id === currentId)
   return index < 0 ? null : episodes.slice(index + 1).find((episode) => episode.status === 'ready') || null
 }

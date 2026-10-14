@@ -3,6 +3,7 @@ import { Button, StateScreen } from './components/Chrome'
 import { useCatalog } from './hooks/useCatalog'
 import { rememberFocus, useRemoteNavigation } from './remote/useRemoteNavigation'
 import { remoteAction } from './remote/keys'
+import { useFullscreen } from './remote/fullscreen'
 import { useRoute } from './hooks/useRoute'
 import { findEpisode } from './lib/catalog'
 import { readSelectedSeason, writeSelectedSeason } from './lib/seasonSelection'
@@ -17,6 +18,7 @@ export function App() {
   const series = route.screen === 'series' ? catalog?.series.find((item) => item.id === route.id) : null
   const found = route.screen === 'watch' && catalog ? findEpisode(catalog.series, route.id) : null
   const playerReady = route.screen === 'watch' && found?.episode.status === 'ready'
+  useFullscreen(route.screen === 'watch')
   const initialFocusKey = route.screen === 'home' ? 'featured-series' : route.screen === 'downloads' ? 'upload-torrent' : route.screen === 'series' && series ? `season-${series.id}-${readSelectedSeason(series)}` : undefined
   useRemoteNavigation(!playerReady, path, initialFocusKey)
 

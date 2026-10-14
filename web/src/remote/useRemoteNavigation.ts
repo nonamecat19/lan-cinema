@@ -49,10 +49,27 @@ export function useRemoteNavigation(active: boolean, viewKey: string, initialFoc
       }
       if (current.classList.contains('season-tab') && (action.direction === 'left' || action.direction === 'right')) {
         const tabs = items.filter((item) => item.classList.contains('season-tab'))
-        const next = tabs[(tabs.indexOf(current) + (action.direction === 'right' ? 1 : -1) + tabs.length) % tabs.length]
+        const next = tabs[Math.max(0, Math.min(tabs.length - 1, tabs.indexOf(current) + (action.direction === 'right' ? 1 : -1)))]
         select(next)
-        next.click()
+        if (next !== current) next.click()
         return
+      }
+      if (current.classList.contains('episode-row')) {
+        const rows = items.filter((item) => item.classList.contains('episode-row'))
+        const tabs = items.filter((item) => item.classList.contains('season-tab'))
+        const selectedTab = tabs.find((item) => item.getAttribute('aria-selected') === 'true')
+        if (action.direction === 'up' && current === rows[0] && selectedTab) {
+          select(selectedTab)
+          return
+        }
+        if (action.direction === 'down' && current === rows[rows.length - 1] && selectedTab) {
+          const next = tabs[tabs.indexOf(selectedTab) + 1]
+          if (next) {
+            select(next)
+            next.click()
+            return
+          }
+        }
       }
       select(closestItem(items, current, action.direction) || current)
     }
