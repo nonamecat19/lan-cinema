@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -181,6 +182,50 @@ func TestImportRejectsDifferentExistingLibraryFile(t *testing.T) {
 	}
 }
 
+func TestImportRejectsSameSizeDifferentContentAndSymlinkTarget(t *testing.T) {
+	for _, name := range []string{"same-size different content", "symlink target"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			hash := strings.Repeat("e", 40)
+			fileName := "S01E01 - Pilot.mp4"
+			sourceDir := filepath.Join(root, "downloads", hash)
+			targetDir := filepath.Join(root, "media", "Series", "Season 01")
+			for _, directory := range []string{sourceDir, targetDir} {
+				if err := os.MkdirAll(directory, 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			source := filepath.Join(sourceDir, fileName)
+			target := filepath.Join(targetDir, fileName)
+			if err := os.WriteFile(source, []byte("episode one"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if name == "symlink target" {
+				if err := os.Symlink(source, target); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(target, []byte("episode two"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			manager := &TorrentManager{downloads: filepath.Join(root, "downloads"), mediaRoot: filepath.Join(root, "media")}
+			if err := manager.importFile(hash, TorrentFile{Name: fileName}, "Series"); !errors.Is(err, errImportCollision) {
+				t.Fatalf("unexpected collision result: %v", err)
+			}
+			if name == "symlink target" {
+				info, err := os.Lstat(target)
+				if err != nil || info.Mode()&os.ModeSymlink == 0 {
+					t.Fatalf("target symlink changed: %v", err)
+				}
+			} else {
+				data, err := os.ReadFile(target)
+				if err != nil || string(data) != "episode two" {
+					t.Fatalf("existing target changed: %q, %v", data, err)
+				}
+			}
+		})
+	}
+}
+
 func TestCopyImportReportsProgressAndPublishesOnlyCompleteFile(t *testing.T) {
 	root := t.TempDir()
 	hash := strings.Repeat("d", 40)
@@ -212,6 +257,9 @@ func TestCopyImportReportsProgressAndPublishesOnlyCompleteFile(t *testing.T) {
 	got, err := os.ReadFile(target)
 	if err != nil || !reflect.DeepEqual(got, data) {
 		t.Fatalf("unexpected imported file size %d: %v", len(got), err)
+	}
+	if err := manager.importFileFromPathWithProgress(TorrentFile{Name: name}, "Series", filepath.Join(sourceDir, name), nil); err != nil {
+		t.Fatalf("completed copy was not reusable: %v", err)
 	}
 	entries, err := os.ReadDir(filepath.Dir(target))
 	if err != nil || len(entries) != 1 || entries[0].Name() != name {

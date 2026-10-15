@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -129,6 +130,7 @@ type qbitInfo struct {
 var torrentEpisodePattern = regexp.MustCompile(`(?i)S([0-9]{1,3})E([0-9]{1,3})(?:[^A-Za-z0-9]+(.*))?$`)
 var torrentSeasonPattern = regexp.MustCompile(`(?i)^(?:Season\s*|S)([0-9]{1,3})$`)
 var torrentNoisePattern = regexp.MustCompile(`(?i)(?:web[-_. ]?dlrip|bdrip|brrip|webrip|hdtv|1080p|720p|2160p|x264|x265|h264|h265|aac|hevc|proper|repack|eng|ukr|rus|mkv|mp4)`)
+var errImportCollision = errors.New("existing library episode differs from completed file")
 
 func NewTorrentManager(root, extraRoot, mediaRoot, downloads, baseURL, statePath string) *TorrentManager {
 	manager := &TorrentManager{root: root, extraRoot: extraRoot, uploadRoot: filepath.Join(filepath.Dir(statePath), "torrent-uploads"), mediaRoot: mediaRoot, downloads: downloads, baseURL: strings.TrimRight(baseURL, "/"), statePath: statePath, client: &http.Client{Timeout: 20 * time.Second}, selections: make(map[string]TorrentSelection), imported: make(map[string]bool), importErrors: make(map[string]string), importing: make(map[string]int)}
@@ -663,7 +665,7 @@ func importFailureDetail(err error) string {
 		return "Completed file disappeared during import"
 	case strings.Contains(err.Error(), "torrent file path is invalid"):
 		return "Torrent file is outside the download directory"
-	case strings.Contains(err.Error(), "existing library episode"):
+	case errors.Is(err, errImportCollision):
 		return "Existing library episode differs from the completed file"
 	default:
 		return "Could not import the completed file"
@@ -739,13 +741,10 @@ func (manager *TorrentManager) importFileFromPathWithProgress(file TorrentFile, 
 	if err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("torrent file is not regular")
 	}
-	if existing, err := os.Stat(target); err == nil {
-		if existing.Mode().IsRegular() && existing.Size() == info.Size() {
-			return nil
-		}
-		return fmt.Errorf("existing library episode differs from completed file")
-	} else if !errors.Is(err, os.ErrNotExist) {
+	if exists, err := existingImportMatches(resolvedSource, target, info); err != nil {
 		return err
+	} else if exists {
+		return nil
 	}
 	linkSource := manager.linkSource
 	if linkSource == nil {
@@ -782,15 +781,73 @@ func (manager *TorrentManager) importFileFromPathWithProgress(file TorrentFile, 
 	}
 	if err := os.Link(output.Name(), target); err != nil {
 		if errors.Is(err, os.ErrExist) {
-			existing, statErr := os.Stat(target)
-			if statErr == nil && existing.Mode().IsRegular() && existing.Size() == info.Size() {
+			exists, compareErr := existingImportMatches(resolvedSource, target, info)
+			if compareErr != nil {
+				return compareErr
+			}
+			if exists {
 				return nil
 			}
-			return fmt.Errorf("existing library episode differs from completed file")
+			return errImportCollision
 		}
 		return err
 	}
 	return nil
+}
+
+func existingImportMatches(source, target string, sourceInfo os.FileInfo) (bool, error) {
+	targetInfo, err := os.Lstat(target)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !targetInfo.Mode().IsRegular() || targetInfo.Size() != sourceInfo.Size() {
+		return false, errImportCollision
+	}
+	if os.SameFile(sourceInfo, targetInfo) {
+		return true, nil
+	}
+	sourceFile, err := os.Open(source)
+	if err != nil {
+		return false, err
+	}
+	defer sourceFile.Close()
+	targetFile, err := os.OpenFile(target, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if errors.Is(err, syscall.ELOOP) {
+		return false, errImportCollision
+	}
+	if err != nil {
+		return false, err
+	}
+	defer targetFile.Close()
+	openedInfo, err := targetFile.Stat()
+	if err != nil {
+		return false, err
+	}
+	if !os.SameFile(targetInfo, openedInfo) {
+		return false, errImportCollision
+	}
+	sourceBuffer := make([]byte, 32<<10)
+	targetBuffer := make([]byte, len(sourceBuffer))
+	for remaining := sourceInfo.Size(); remaining > 0; {
+		length := len(sourceBuffer)
+		if remaining < int64(length) {
+			length = int(remaining)
+		}
+		if _, err := io.ReadFull(sourceFile, sourceBuffer[:length]); err != nil {
+			return false, errImportCollision
+		}
+		if _, err := io.ReadFull(targetFile, targetBuffer[:length]); err != nil {
+			return false, errImportCollision
+		}
+		if !bytes.Equal(sourceBuffer[:length], targetBuffer[:length]) {
+			return false, errImportCollision
+		}
+		remaining -= int64(length)
+	}
+	return true, nil
 }
 
 type importProgressWriter struct {
