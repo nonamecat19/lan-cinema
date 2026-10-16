@@ -5,6 +5,7 @@ type TVElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> |
 
 export function useFullscreen(watching: boolean): void {
   useEffect(() => {
+    if (!watching) return
     let pending = false
     const request = () => {
       const root = document.documentElement as TVElement
