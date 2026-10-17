@@ -27,7 +27,11 @@ func main() {
 		log.Fatalf("unable to listen on configured port: %v", err)
 	}
 	torrents.StartWatcher(app.RefreshCatalog)
-	log.Printf("startup ready at %s", lanURL(config.Port))
+	if config.LANURL != "" {
+		log.Printf("startup ready at %s", config.LANURL)
+	} else {
+		log.Printf("startup ready at %s", lanURL(config.Port))
+	}
 	if err := http.Serve(listener, app.Handler()); err != nil {
 		log.Fatal(err)
 	}

@@ -55,7 +55,7 @@ The Downloads page shows transfer state and per-episode download, waiting import
 
 Put additional `.torrent` files beside `compose.yaml`, then reload the Downloads screen. Torrent data and client settings persist in `./downloads` and `./qbt-config`. The qBittorrent WebUI is not published on the host. TCP and UDP port `6881` are published for peer connections; allow them through the host firewall if downloads need incoming peers.
 
-Wait for the `startup ready` log, then open `http://<server-lan-address>:8080` on the TV. Find the host address with `hostname -I`. Allow TCP port `8080` from the trusted LAN in the host firewall. Do not forward the port to the internet.
+Wait for the `startup ready` log, then open `http://<server-lan-address>:8080` on the TV. Find the address of the host's network interface with `ip -4 -o addr show scope global`; choose the address on the same network as the TV, not a Docker or VPN address. Set `LAN_URL` in `.env` to that full URL so the startup log prints the TV address rather than the container address. Allow TCP port `8080` from the trusted LAN in the host firewall. Do not forward the port to the internet.
 
 Set these variables in a `.env` file beside `compose.yaml` to use other host paths or a different host port:
 
@@ -63,6 +63,7 @@ Set these variables in a `.env` file beside `compose.yaml` to use other host pat
 MEDIA_HOST_PATH=/srv/media/series
 CACHE_HOST_PATH=/var/cache/tv-streamer
 HOST_PORT=8080
+LAN_URL=http://192.168.1.10:8080
 TORRENT_HOST_PATH=.
 DOWNLOAD_HOST_PATH=./downloads
 QBITTORRENT_CONFIG_PATH=./qbt-config

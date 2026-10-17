@@ -80,6 +80,7 @@ func (app *App) RefreshCatalog() error {
 	app.catalog.Store(catalog)
 	app.ready.Store(true)
 	app.catalogMu.Unlock()
+	log.Printf("catalog scanned: series=%d episodes=%d unavailable=%d newPreparations=%d", len(catalog.Series), catalog.Count(), catalog.Failures(), len(jobs))
 	for _, episode := range jobs {
 		go app.runPreparation(episode)
 	}

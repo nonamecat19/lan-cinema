@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,10 +16,11 @@ type Config struct {
 	TorrentURL          string
 	TorrentDownloadRoot string
 	Port                string
+	LANURL              string
 }
 
 func LoadConfig() (Config, error) {
-	config := Config{MediaRoot: os.Getenv("MEDIA_ROOT"), CacheDir: os.Getenv("CACHE_DIR"), TorrentRoot: os.Getenv("TORRENT_ROOT"), TorrentExtraRoot: os.Getenv("TORRENT_EXTRA_ROOT"), TorrentURL: os.Getenv("TORRENT_URL"), TorrentDownloadRoot: os.Getenv("TORRENT_DOWNLOAD_ROOT"), Port: os.Getenv("PORT")}
+	config := Config{MediaRoot: os.Getenv("MEDIA_ROOT"), CacheDir: os.Getenv("CACHE_DIR"), TorrentRoot: os.Getenv("TORRENT_ROOT"), TorrentExtraRoot: os.Getenv("TORRENT_EXTRA_ROOT"), TorrentURL: os.Getenv("TORRENT_URL"), TorrentDownloadRoot: os.Getenv("TORRENT_DOWNLOAD_ROOT"), Port: os.Getenv("PORT"), LANURL: os.Getenv("LAN_URL")}
 	if config.MediaRoot == "" || config.CacheDir == "" {
 		return Config{}, fmt.Errorf("MEDIA_ROOT and CACHE_DIR are required")
 	}
@@ -47,6 +49,12 @@ func LoadConfig() (Config, error) {
 	}
 	if config.Port == "" {
 		config.Port = "8080"
+	}
+	if config.LANURL != "" {
+		parsed, err := url.Parse(config.LANURL)
+		if err != nil || parsed.Scheme != "http" || parsed.Hostname() == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return Config{}, fmt.Errorf("LAN_URL must be an HTTP origin such as http://192.168.1.10:8080")
+		}
 	}
 	config.MediaRoot = root
 	config.CacheDir = cache
