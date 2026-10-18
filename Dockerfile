@@ -13,7 +13,7 @@ COPY server ./server
 RUN CGO_ENABLED=0 go build -buildvcs=false -o /out/tv-streamer .
 
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates ffmpeg
+RUN apk add --no-cache ca-certificates ffmpeg mesa-va-gallium
 WORKDIR /app
 COPY --from=backend /out/tv-streamer /app/tv-streamer
 COPY --from=frontend /src/web/dist /app/web/dist

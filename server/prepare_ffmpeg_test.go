@@ -147,6 +147,32 @@ func TestPrepareRemuxesMKVAndAddsAudioOnlyWhenMissing(t *testing.T) {
 	}
 }
 
+func TestPrepareConvertsHighTenVideoToEightBitH264(t *testing.T) {
+	requireFFmpeg(t)
+	t.Setenv("VIDEO_ACCELERATION", "software")
+	root := t.TempDir()
+	source := filepath.Join(root, "high-ten.mp4")
+	runFFmpeg(t, "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=10", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "1", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p10le", "-c:a", "aac", "-movflags", "+faststart", source)
+	media, err := probe(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.H264 {
+		t.Fatal("10-bit H.264 was accepted for direct playback")
+	}
+	episode := Episode{ID: "high-ten", SourcePath: source}
+	if err := prepareEpisode(&episode, root); err != nil {
+		t.Fatal(err)
+	}
+	if episode.Status != "ready" || episode.PlaybackPath == source {
+		t.Fatalf("10-bit source was not converted: %#v", episode)
+	}
+	prepared, err := probe(episode.PlaybackPath)
+	if err != nil || !prepared.H264 || !prepared.AAC {
+		t.Fatalf("prepared video is not browser compatible: %#v, %v", prepared, err)
+	}
+}
+
 func TestRefreshMakesDirectAndCachedEpisodesReadyWithoutPreparationSlots(t *testing.T) {
 	requireFFmpeg(t)
 	root := t.TempDir()

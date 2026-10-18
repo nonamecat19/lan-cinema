@@ -12,8 +12,9 @@ import (
 
 type probeResult struct {
 	Streams []struct {
-		CodecType string `json:"codec_type"`
-		CodecName string `json:"codec_name"`
+		CodecType   string `json:"codec_type"`
+		CodecName   string `json:"codec_name"`
+		PixelFormat string `json:"pix_fmt"`
 	} `json:"streams"`
 	Format struct {
 		Duration string `json:"duration"`
@@ -30,7 +31,7 @@ type mediaInfo struct {
 }
 
 func probe(path string) (mediaInfo, error) {
-	command := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name:format=duration,format_name", "-of", "json", path)
+	command := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,pix_fmt:format=duration,format_name", "-of", "json", path)
 	output, err := command.Output()
 	if err != nil {
 		return mediaInfo{}, fmt.Errorf("FFprobe failed")
@@ -44,7 +45,7 @@ func probe(path string) (mediaInfo, error) {
 	for _, stream := range result.Streams {
 		if stream.CodecType == "video" && !seenVideo {
 			seenVideo = true
-			info.H264 = stream.CodecName == "h264"
+			info.H264 = stream.CodecName == "h264" && stream.PixelFormat == "yuv420p"
 		}
 		if stream.CodecType == "audio" && !info.HasAudio {
 			info.HasAudio = true

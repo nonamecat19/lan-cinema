@@ -14,6 +14,7 @@ services:
       TORRENT_URL: http://qbittorrent:8080
       PORT: "8080"
       LAN_URL: "${LAN_URL:-}"
+      VIDEO_ACCELERATION: "${VIDEO_ACCELERATION:-auto}"
     volumes:
       - "${MEDIA_HOST_PATH:-./videos}:/media"
       - "${CACHE_HOST_PATH:-./cache}:/cache"

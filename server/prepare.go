@@ -15,7 +15,7 @@ import (
 )
 
 func cachePath(cacheDir, id, fingerprint string) string {
-	return filepath.Join(cacheDir, id+"-v2-"+fingerprint+".mp4")
+	return filepath.Join(cacheDir, id+"-v3-"+fingerprint+".mp4")
 }
 
 func prepareEpisode(episode *Episode, cacheDir string) error {
@@ -98,27 +98,84 @@ func convertEpisode(episode *Episode, cacheDir string, plan preparationPlan, upd
 		return fmt.Errorf("Cache is unavailable")
 	}
 	defer os.Remove(temporaryPath)
-	args := []string{"-v", "error", "-y", "-i", episode.SourcePath}
-	if !plan.media.HasAudio {
+	device := ""
+	if !plan.media.H264 {
+		device = vaapiDevice()
+	}
+	for {
+		stage := "Converting video"
+		if plan.media.H264 {
+			stage = "Remuxing MP4"
+		}
+		if err := runConversion(conversionArgs(episode, plan.media, temporaryPath, device), plan.media.Duration, stage, report); err == nil {
+			report("Validating playback", 99)
+			cached, probeErr := probe(temporaryPath)
+			fastStartNeeded, atomErr := needsFastStart(temporaryPath)
+			if probeErr == nil && cached.H264 && cached.AAC && atomErr == nil && !fastStartNeeded {
+				if err := os.Rename(temporaryPath, plan.finalPath); err != nil {
+					return fmt.Errorf("Unable to save prepared MP4")
+				}
+				episode.DurationSeconds = &cached.Duration
+				episode.PlaybackPath = plan.finalPath
+				episode.Status = "ready"
+				return nil
+			}
+		}
+		if device == "" {
+			log.Printf("media preparation failed for episode %s", episode.ID)
+			return fmt.Errorf("Unable to prepare browser-compatible MP4")
+		}
+		log.Printf("hardware encoding failed for episode %s; retrying in software", episode.ID)
+		device = ""
+	}
+}
+
+func vaapiDevice() string {
+	if os.Getenv("VIDEO_ACCELERATION") == "software" {
+		return ""
+	}
+	devices, _ := filepath.Glob("/dev/dri/renderD*")
+	for _, device := range devices {
+		info, err := os.Stat(device)
+		if err == nil && info.Mode()&os.ModeDevice != 0 {
+			return device
+		}
+	}
+	return ""
+}
+
+func conversionArgs(episode *Episode, media mediaInfo, temporaryPath, device string) []string {
+	args := []string{"-nostats", "-progress", "pipe:1", "-v", "error", "-y"}
+	if device != "" {
+		args = append(args, "-vaapi_device", device)
+	}
+	args = append(args, "-i", episode.SourcePath)
+	if !media.HasAudio {
 		args = append(args, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000")
 	}
 	args = append(args, "-map", "0:v:0")
-	if plan.media.HasAudio {
+	if media.HasAudio {
 		args = append(args, "-map", "0:a:0")
 	} else {
 		args = append(args, "-map", "1:a:0", "-shortest")
 	}
-	videoCodec := "libx264"
-	if plan.media.H264 {
-		videoCodec = "copy"
+	if media.H264 {
+		args = append(args, "-c:v", "copy")
+	} else if device != "" {
+		args = append(args, "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi", "-qp", "23")
+	} else {
+		args = append(args, "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "veryfast")
 	}
 	audioCodec := "aac"
-	if plan.media.AAC {
+	if media.AAC {
 		audioCodec = "copy"
 	}
-	args = append(args, "-c:v", videoCodec, "-c:a", audioCodec)
+	args = append(args, "-c:a", audioCodec)
 	args = append(args, "-movflags", "+faststart", "-f", "mp4", temporaryPath)
-	args = append([]string{"-nostats", "-progress", "pipe:1"}, args...)
+	return args
+}
+
+func runConversion(args []string, duration int64, stage string, report func(string, int)) error {
 	command := exec.Command("ffmpeg", args...)
 	output, err := command.StdoutPipe()
 	if err != nil {
@@ -129,23 +186,19 @@ func convertEpisode(episode *Episode, cacheDir string, plan preparationPlan, upd
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("Unable to prepare MP4 for streaming")
 	}
-	stage := "Converting video"
-	if plan.media.H264 {
-		stage = "Remuxing MP4"
-	}
 	report(stage, 0)
 	scanner := bufio.NewScanner(output)
 	lastProgress := 0
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "out_time_us=") || plan.media.Duration <= 0 {
+		if !strings.HasPrefix(line, "out_time_us=") || duration <= 0 {
 			continue
 		}
 		microseconds, err := strconv.ParseInt(strings.TrimPrefix(line, "out_time_us="), 10, 64)
 		if err != nil {
 			continue
 		}
-		progress := int(microseconds * 100 / (plan.media.Duration * 1000000))
+		progress := int(microseconds * 100 / (duration * 1000000))
 		if progress > 99 {
 			progress = 99
 		}
@@ -155,23 +208,8 @@ func convertEpisode(episode *Episode, cacheDir string, plan preparationPlan, upd
 		}
 	}
 	if err := command.Wait(); err != nil || scanner.Err() != nil {
-		if errorOutput.Len() > 0 {
-			log.Printf("media preparation failed for episode %s", episode.ID)
-		}
 		return fmt.Errorf("Unable to prepare MP4 for streaming")
 	}
-	report("Validating playback", 99)
-	cached, err := probe(temporaryPath)
-	preparedNeedsFastStart, atomErr := needsFastStart(temporaryPath)
-	if err != nil || !cached.H264 || !cached.AAC || atomErr != nil || preparedNeedsFastStart {
-		return fmt.Errorf("Prepared MP4 failed validation")
-	}
-	if err := os.Rename(temporaryPath, plan.finalPath); err != nil {
-		return fmt.Errorf("Unable to save prepared MP4")
-	}
-	episode.DurationSeconds = &cached.Duration
-	episode.PlaybackPath = plan.finalPath
-	episode.Status = "ready"
 	return nil
 }
 

@@ -34,7 +34,7 @@ MEDIA_ROOT=/srv/media/series CACHE_DIR=/var/cache/tv-streamer PORT=8080 ./tv-str
 
 Open the LAN URL printed by the server in the TV browser. The listening port must be reachable over the trusted LAN. Do not forward it to the internet; the app has no authentication.
 
-The startup scan recognizes series directories containing `Season NN` directories and files named `SNNENN - Title` with MP4, MKV, AVI, MOV, M4V, or WebM extensions. Manually added files are picked up after a server restart. Completed torrent downloads are imported and added to the catalog automatically. Unsupported codecs are prepared as H.264/AAC MP4 in the cache. The library opens after scanning while media preparation continues in the background. Episode rows show probing, remuxing, conversion, validation, and failure status.
+The startup scan recognizes series directories containing `Season NN` directories and files named `SNNENN - Title` with MP4, MKV, AVI, MOV, M4V, or WebM extensions. Manually added files are picked up after a server restart. Completed torrent downloads are imported and added to the catalog automatically. Unsupported codecs are prepared as 8-bit H.264/AAC MP4 in the cache. The library opens after scanning while media preparation continues in the background. Episode rows show probing, remuxing, conversion, validation, and failure status.
 
 Progress is stored in each browser's local storage and is not synchronized between devices. Unfinished episodes appear in the Continue watching shelf, ordered by the most recent playback. Media preparation writes only to the separate cache. Torrent imports create normalized copies or hard links in the library while preserving the originals for seeding.
 
@@ -48,6 +48,8 @@ Docker Compose builds the frontend and Go server into one image. FFmpeg and FFpr
 docker compose up --build -d
 docker compose logs -f tv
 ```
+
+On a Linux host with an AMD VAAPI render device at `/dev/dri/renderD128`, add `COMPOSE_FILE=compose.yaml:compose.gpu.yaml` to `.env` before building. The app uses hardware H.264 encoding when the device works and retries with a faster software encoder if it does not. Other hosts can use the default Compose file. Set `VIDEO_ACCELERATION=software` to turn off hardware encoding. Existing prepared files from earlier conversion settings are rebuilt once so every ready video uses 8-bit H.264.
 
 Open **Downloads** in the app to upload a `.torrent` file from your device or select one from the project root or `TORRENT_EXTRA_HOST_PATH`, inspect its contents, choose seasons, and start, pause, or remove transfers. Removing a transfer deletes its qBittorrent staging data while imported episodes stay in the media library. Uploaded torrent files persist in `./cache/torrent-uploads` and are limited to 8 MB. The app imports each completed video into the matching series and season folder in `MEDIA_HOST_PATH`, preserving qBittorrent's original files for seeding. It prepares imported MKV and other supported video files for browser playback and refreshes the catalog automatically.
 
