@@ -5,7 +5,7 @@
 }
 
 @media (max-width: 700px) {
-  .app-shell { padding-right: 20px; padding-left: 20px; }
+  .app-shell { --topbar-height: 72px; padding-right: 20px; padding-left: 20px; }
   .topbar { min-height: 72px; gap: 12px; }
   .brand { font-size: 13px; gap: 8px; }
   .brand-icon { width: 30px; height: 30px; font-size: 17px; }
