@@ -73,3 +73,87 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+@media (min-width: 1101px) {
+  :root { --topbar-height: 72px; }
+  .app-shell { padding-inline: clamp(20px, 4vw, 72px); }
+  .topbar { gap: 22px; }
+  .brand { gap: 10px; font-size: 14px; }
+  .brand-icon { width: 30px; height: 30px; font-size: 18px; }
+  .button { min-height: 44px; padding: 11px 16px; font-size: 13px; }
+  .header-downloads { min-height: 44px; padding: 9px 13px; }
+  .welcome-row { padding: clamp(35px, 4.8vh, 60px) 0 27px; }
+  .welcome-row h1 { font-size: clamp(40px, 4.8vw, 72px); }
+  .welcome-row p { font-size: clamp(13px, 1.1vw, 16px); }
+  .library-count { min-width: 120px; padding-left: 20px; }
+  .library-count strong { font-size: 30px; }
+  .feature-card { min-height: clamp(230px, 22vw, 330px); margin-bottom: 42px; padding: clamp(24px, 3.2vw, 52px); }
+  .feature-copy h2 { font-size: clamp(30px, 3.5vw, 52px); }
+  .feature-copy p { font-size: clamp(13px, 1.1vw, 16px); }
+  .feature-copy .button { min-width: 160px; }
+  .feature-index { right: 24px; bottom: 20px; }
+  .section-heading { margin-bottom: 18px; }
+  .section-heading h2 { font-size: clamp(21px, 1.9vw, 29px); }
+  .continue-section, .collection { padding-bottom: 44px; }
+  .active-downloads { padding-bottom: 48px; }
+  .continue-grid, .series-grid { grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 20px; }
+  .continue-copy { min-height: 84px; padding: 12px 13px 10px; }
+  .continue-copy strong { font-size: 14px; }
+  .continue-copy span { font-size: 11px; }
+  .continue-copy small { font-size: 10px; }
+  .art-glyph { font-size: clamp(56px, 6.4vw, 104px); }
+  .card-copy { min-height: 70px; padding: 14px 35px 14px 15px; }
+  .card-copy strong { font-size: clamp(14px, 1.15vw, 17px); }
+  .card-copy > span { font-size: 10px; }
+  .card-arrow { right: 15px; bottom: 16px; font-size: 16px; }
+  .series-hero { min-height: 232px; margin-right: calc(-1 * clamp(20px, 4vw, 72px)); margin-left: calc(-1 * clamp(20px, 4vw, 72px)); padding: 36px clamp(20px, 4vw, 72px); }
+  .series-hero h1 { font-size: clamp(38px, 4.1vw, 60px); }
+  .series-hero p { font-size: 13px; }
+  .episode-section { padding: 38px 0 48px; }
+  .season-tabs { gap: 8px; margin-bottom: 20px; }
+  .season-tab { min-height: 44px; padding: 10px 16px; font-size: 10px; }
+  .episode-row { grid-template-columns: clamp(88px, 10vw, 150px) minmax(0, 1fr) 56px 44px; gap: 18px; min-height: 104px; padding: 14px 16px; }
+  .episode-info strong { font-size: clamp(14px, 1.35vw, 20px); }
+  .episode-info > span:last-child:not(.episode-progress) { font-size: 11px; }
+  .episode-play { width: 44px; height: 44px; }
+  .download-heading { padding: 44px 0 32px; }
+  .download-heading h1 { font-size: clamp(38px, 4.5vw, 64px); }
+  .download-heading p { font-size: 14px; }
+  .download-content { grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); gap: clamp(20px, 2.5vw, 36px); padding-bottom: 48px; }
+  .download-column .section-heading { min-height: 60px; }
+  .torrent-source { min-height: 72px; gap: 14px; padding: 12px 13px; }
+  .torrent-source-icon { width: 40px; height: 40px; font-size: 20px; }
+  .download-empty { padding: 18px 13px; font-size: 13px; }
+  .season-picker { padding: 20px; }
+  .series-title-field { margin-bottom: 18px; }
+  .series-title-field input { min-height: 44px; font-size: 14px; }
+  .season-check-list { gap: 8px; margin-bottom: 20px; }
+  .season-check { min-height: 48px; padding: 10px 12px; }
+  .series-download-list { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 8px; }
+  .series-download-season { padding: 13px; }
+  .series-download-main { min-height: 100px; gap: 12px; }
+  .series-download-heading .button { min-height: 44px; }
+  .series-download-actions .button { min-height: 44px; padding: 8px 10px; }
+  .series-download-copy strong { font-size: 14px; }
+  .series-download-copy span { font-size: 10px; }
+  .active-download { padding: 20px 14px; }
+  .active-download-title strong { font-size: 15px; }
+  .download-actions .button, .download-remove-confirm .button, .download-file-section > .button { min-height: 44px; }
+  .player-top { top: 4vh; right: 4vw; left: 4vw; gap: 18px; }
+  .player-top h1 { font-size: clamp(18px, 1.7vw, 26px); }
+  .back-icon, .play-row > button { width: 44px; height: 44px; }
+  .player-controls { right: 4vw; bottom: 5vh; left: 4vw; }
+  .play-row { gap: 14px; font-size: 12px; }
+  .seek-preview-frame { width: 192px; height: 108px; }
+  .center-action .button { min-height: 52px; padding: 15px 24px; font-size: 16px; }
+  .player-message { width: min(440px, 88vw); padding: 28px; }
+  .next-card { width: min(360px, 88vw); padding: 24px; }
+  .player-message h2 { font-size: 26px; }
+  .next-card h2 { font-size: 23px; }
+  .player-message p, .next-card p { font-size: 13px; }
+  .footer-note { padding: 20px 0 22px; }
+  .state-screen h1 { font-size: clamp(30px, 4.2vw, 52px); }
+  .state-screen p { font-size: 14px; }
+  .state-mark { width: 56px; height: 56px; font-size: 26px; }
+  .loader { width: 42px; height: 42px; }
+}
