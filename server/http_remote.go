@@ -116,13 +116,14 @@ func decodeRemoteState(data json.RawMessage) (RemotePlaybackState, error) {
 }
 
 func (app *App) remoteCommandHandler(writer http.ResponseWriter, request *http.Request, id string) {
-	var payload RemoteCommandPayload
-	if err := decodeRemoteRequest(writer, request, &payload); err != nil {
+	var body json.RawMessage
+	if err := decodeRemoteRequest(writer, request, &body); err != nil {
 		writeJSONError(writer, http.StatusBadRequest, "Invalid remote command")
 		return
 	}
-	if err := payload.validate(); err != nil {
-		writeJSONError(writer, http.StatusBadRequest, err.Error())
+	payload, err := decodeRemoteCommand(body)
+	if err != nil {
+		writeJSONError(writer, http.StatusBadRequest, "Invalid remote command")
 		return
 	}
 	if _, exists := app.remote.Get(id); !exists {
@@ -144,6 +145,55 @@ func (app *App) remoteCommandHandler(writer http.ResponseWriter, request *http.R
 		return
 	}
 	writeJSON(writer, http.StatusAccepted, map[string]bool{"queued": true})
+}
+
+func decodeRemoteCommand(data json.RawMessage) (RemoteCommandPayload, error) {
+	invalid := errors.New("invalid remote command")
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return RemoteCommandPayload{}, err
+	}
+	var commandType string
+	if err := json.Unmarshal(fields["type"], &commandType); err != nil {
+		return RemoteCommandPayload{}, invalid
+	}
+	required := ""
+	switch commandType {
+	case "playEpisode":
+		required = "episodeId"
+	case "setPlaying":
+		required = "playing"
+	case "seek":
+		required = "position"
+	case "setMuted":
+		required = "muted"
+	case "setVolume":
+		required = "volume"
+	case "stop":
+	default:
+		return RemoteCommandPayload{}, invalid
+	}
+	expectedFields := 1
+	if required != "" {
+		expectedFields++
+	}
+	if len(fields) != expectedFields {
+		return RemoteCommandPayload{}, invalid
+	}
+	if required != "" {
+		value, exists := fields[required]
+		if !exists || string(value) == "null" {
+			return RemoteCommandPayload{}, invalid
+		}
+	}
+	var payload RemoteCommandPayload
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return RemoteCommandPayload{}, err
+	}
+	if err := payload.validate(); err != nil {
+		return RemoteCommandPayload{}, err
+	}
+	return payload, nil
 }
 
 func decodeRemoteRequest(writer http.ResponseWriter, request *http.Request, value any) error {
