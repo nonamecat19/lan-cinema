@@ -11,15 +11,15 @@ function randomDisplayID(): string {
 
 export function isMobileDevice(): boolean {
   const userAgentData = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
-  if (typeof userAgentData?.mobile === 'boolean') return userAgentData.mobile
-  return window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 768
+  return userAgentData?.mobile === true || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 768)
 }
 
 export function getRemoteDisplayId(): string {
   if (memoryDisplayID) return memoryDisplayID
   try {
     const stored = sessionStorage.getItem(displayIDKey)
-    if (stored && /^[A-Za-z0-9_-]{1,128}$/.test(stored)) {
+    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    if (navigation?.type === 'reload' && stored && /^[A-Za-z0-9_-]{1,128}$/.test(stored)) {
       memoryDisplayID = stored
       return stored
     }
