@@ -2,12 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent } from 'react'
 import { Button, StateScreen } from '../components/Chrome'
 import type { Episode, EpisodeLocation, EpisodeWithSeason } from '../domain/media'
+import type { RemoteCommand, RemotePlaybackState } from '../domain/remote'
 import type { Navigate } from '../hooks/useRoute'
 import { useRemoteNavigation } from '../remote/useRemoteNavigation'
 import { remoteAction } from '../remote/keys'
 import { nextReadyEpisode } from '../lib/catalog'
 import { formatTime, pad } from '../lib/format'
 import { clearProgress, resumePosition, writeProgress } from '../lib/progress'
+
+const noRemoteCommands: RemoteCommand[] = []
+const ignoreRemoteCommand = (_id: string) => {}
+const ignorePlaybackState = (_state: RemotePlaybackState) => {}
 
 function previewStyle(episode: Episode, time: number): CSSProperties | undefined {
   if (!episode.previewSpriteUrl) return undefined
@@ -24,12 +29,14 @@ function previewStyle(episode: Episode, time: number): CSSProperties | undefined
   }
 }
 
-export function Player({ episode, season, series, navigate, back }: EpisodeLocation & { navigate: Navigate; back: () => void }) {
+export function Player({ episode, season, series, navigate, back, remoteCommands = noRemoteCommands, acknowledgeRemoteCommand = ignoreRemoteCommand, reportPlaybackState = ignorePlaybackState }: EpisodeLocation & { navigate: Navigate; back: () => void; remoteCommands?: RemoteCommand[]; acknowledgeRemoteCommand?: (id: string) => void; reportPlaybackState?: (state: RemotePlaybackState) => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const hideTimer = useRef<number | undefined>(undefined)
   const previewTimer = useRef<number | undefined>(undefined)
   const ended = useRef(false)
+  const handledRemoteCommands = useRef<Set<string>>(new Set())
   const [error, setError] = useState(false)
+  const [mediaReady, setMediaReady] = useState(false)
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [playing, setPlaying] = useState(false)
@@ -40,6 +47,19 @@ export function Player({ episode, season, series, navigate, back }: EpisodeLocat
   const [countdown, setCountdown] = useState<number | null>(null)
   const overlay = error || autoplayBlocked || countdown !== null
   useRemoteNavigation(overlay, `player-${episode.id}-${error}-${autoplayBlocked}-${countdown !== null}`)
+
+  const publishPlaybackState = useCallback((playbackError: string | null = error ? 'Playback stopped' : null) => {
+    const video = videoRef.current
+    reportPlaybackState({
+      episodeId: episode.id,
+      playing: video ? !video.paused : false,
+      position: video && Number.isFinite(video.currentTime) ? video.currentTime : 0,
+      duration: video && Number.isFinite(video.duration) ? video.duration : Number(episode.durationSeconds) || 0,
+      volume: video?.volume ?? 1,
+      muted: video?.muted ?? false,
+      error: playbackError,
+    })
+  }, [episode.id, episode.durationSeconds, error, reportPlaybackState])
 
   const saveProgress = useCallback(() => {
     const video = videoRef.current
@@ -57,6 +77,7 @@ export function Player({ episode, season, series, navigate, back }: EpisodeLocat
     if (!video) return undefined
     ended.current = false
     setError(false)
+    setMediaReady(false)
     setAutoplayBlocked(false)
     setNextEpisode(null)
     setCountdown(null)
@@ -64,6 +85,7 @@ export function Player({ episode, season, series, navigate, back }: EpisodeLocat
     setDuration(0)
     video.src = episode.streamUrl || ''
     video.load()
+    publishPlaybackState(null)
     revealControls()
     return () => {
       if (!ended.current) writeProgress(episode.id, video.currentTime, video.duration)
@@ -74,6 +96,10 @@ export function Player({ episode, season, series, navigate, back }: EpisodeLocat
       clearTimeout(previewTimer.current)
     }
   }, [episode.id, episode.streamUrl, revealControls])
+
+  useEffect(() => {
+    publishPlaybackState()
+  }, [publishPlaybackState])
 
   useEffect(() => {
     const timer = setInterval(saveProgress, 5000)
@@ -97,7 +123,9 @@ export function Player({ episode, season, series, navigate, back }: EpisodeLocat
     if (resume) video.currentTime = resume
     setPosition(resume)
     setDuration(Number.isFinite(video.duration) ? video.duration : Number(episode.durationSeconds) || 0)
+    setMediaReady(true)
     video.play().catch(() => setAutoplayBlocked(true))
+    publishPlaybackState()
   }
 
   function togglePlayback() {
@@ -119,6 +147,44 @@ export function Player({ episode, season, series, navigate, back }: EpisodeLocat
     previewTimer.current = window.setTimeout(() => setPreviewTime(null), 2200)
     revealControls()
   }
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !mediaReady) return
+    for (const command of remoteCommands) {
+      if (handledRemoteCommands.current.has(command.id)) continue
+      switch (command.type) {
+        case 'setPlaying':
+          if (command.playing) video.play().then(() => setAutoplayBlocked(false)).catch(() => setError(true))
+          else video.pause()
+          break
+        case 'playEpisode':
+          if (command.episodeId !== episode.id) return
+          if (ended.current) {
+            ended.current = false
+            video.currentTime = 0
+          }
+          setCountdown(null)
+          setNextEpisode(null)
+          video.play().then(() => setAutoplayBlocked(false)).catch(() => setError(true))
+          break
+        case 'seek':
+          if (!Number.isFinite(video.duration)) return
+          seekTo(command.position)
+          break
+        case 'setMuted':
+          video.muted = command.muted
+          break
+        case 'setVolume':
+          video.volume = command.volume
+          break
+        case 'stop':
+          return
+      }
+      handledRemoteCommands.current.add(command.id)
+      acknowledgeRemoteCommand(command.id)
+    }
+  }, [remoteCommands, episode.id, mediaReady, duration, acknowledgeRemoteCommand])
 
   function timeAtPointer(event: MouseEvent<HTMLDivElement>) {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -169,7 +235,7 @@ export function Player({ episode, season, series, navigate, back }: EpisodeLocat
 
   const total = duration || Number(episode.durationSeconds) || 0
   return <main className="player-screen" onMouseMove={revealControls}>
-    <video ref={videoRef} playsInline preload="auto" onLoadedMetadata={onMetadata} onTimeUpdate={(event) => { setPosition(event.currentTarget.currentTime); if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration) }} onPlay={() => setPlaying(true)} onPause={() => { setPlaying(false); saveProgress() }} onEnded={finishEpisode} onError={() => { setError(true); setAutoplayBlocked(false) }} />
+    <video ref={videoRef} playsInline preload="auto" onLoadedMetadata={onMetadata} onDurationChange={(event) => { if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration); publishPlaybackState() }} onTimeUpdate={(event) => { setPosition(event.currentTarget.currentTime); if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration); publishPlaybackState() }} onPlay={() => { setPlaying(true); publishPlaybackState() }} onPause={() => { setPlaying(false); saveProgress(); publishPlaybackState() }} onVolumeChange={() => publishPlaybackState()} onEnded={finishEpisode} onError={() => { setError(true); setAutoplayBlocked(false); publishPlaybackState('Playback stopped') }} />
     <div className={`player-vignette ${controlsVisible || overlay ? 'visible' : ''}`} />
     {(controlsVisible || overlay) && <div className="player-top"><button type="button" className="back-icon" aria-label="Back to episodes" onClick={back}>←</button><div><span className="eyebrow">{series.title} / SEASON {pad(season.number)}</span><h1>E{pad(episode.number)} · {episode.title}</h1></div><span className="playing-label">NOW PLAYING</span></div>}
     {error && <div className="player-message" role="alert"><span className="eyebrow">CONNECTION INTERRUPTED</span><h2>Playback stopped</h2><p>Check the server and try this episode again.</p><div className="action-row"><Button focusKey="player-retry" onClick={() => { setError(false); videoRef.current?.load() }}>Retry</Button><Button className="secondary" focusKey="player-error-back" onClick={back}>Back to episodes</Button></div></div>}
