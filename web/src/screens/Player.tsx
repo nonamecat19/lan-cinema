@@ -35,6 +35,7 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
   const previewTimer = useRef<number | undefined>(undefined)
   const ended = useRef(false)
   const handledRemoteCommands = useRef<Set<string>>(new Set())
+  const pendingRemoteCommands = useRef<Set<string>>(new Set())
   const [error, setError] = useState(false)
   const [mediaReady, setMediaReady] = useState(false)
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
@@ -151,12 +152,29 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
   useEffect(() => {
     const video = videoRef.current
     if (!video || !mediaReady) return
+    const startPlayback = (id: string) => {
+      pendingRemoteCommands.current.add(id)
+      void video.play().then(() => {
+        pendingRemoteCommands.current.delete(id)
+        if (videoRef.current !== video) return
+        handledRemoteCommands.current.add(id)
+        setAutoplayBlocked(false)
+        acknowledgeRemoteCommand(id)
+      }).catch(() => {
+        pendingRemoteCommands.current.delete(id)
+        if (videoRef.current === video) setError(true)
+      })
+    }
     for (const command of remoteCommands) {
       if (handledRemoteCommands.current.has(command.id)) continue
+      if (pendingRemoteCommands.current.has(command.id)) return
       switch (command.type) {
         case 'setPlaying':
-          if (command.playing) video.play().then(() => setAutoplayBlocked(false)).catch(() => setError(true))
-          else video.pause()
+          if (command.playing) {
+            startPlayback(command.id)
+            return
+          }
+          video.pause()
           break
         case 'playEpisode':
           if (command.episodeId !== episode.id) return
@@ -166,8 +184,8 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
           }
           setCountdown(null)
           setNextEpisode(null)
-          video.play().then(() => setAutoplayBlocked(false)).catch(() => setError(true))
-          break
+          startPlayback(command.id)
+          return
         case 'seek':
           if (!Number.isFinite(video.duration)) return
           seekTo(command.position)
@@ -184,7 +202,7 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
       handledRemoteCommands.current.add(command.id)
       acknowledgeRemoteCommand(command.id)
     }
-  }, [remoteCommands, episode.id, mediaReady, duration, acknowledgeRemoteCommand])
+  }, [remoteCommands, episode.id, mediaReady, duration, error, acknowledgeRemoteCommand])
 
   function timeAtPointer(event: MouseEvent<HTMLDivElement>) {
     const bounds = event.currentTarget.getBoundingClientRect()
