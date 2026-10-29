@@ -12,6 +12,7 @@ import { readSelectedSeason, writeSelectedSeason } from './lib/seasonSelection'
 import { Downloads } from './screens/Downloads'
 import { Library } from './screens/Library'
 import { Player, UnavailableEpisode } from './screens/Player'
+import { Remote } from './screens/Remote'
 import { Series } from './screens/Series'
 
 export function App() {
@@ -72,6 +73,7 @@ export function App() {
     return () => document.removeEventListener('keydown', onBack)
   }, [route.screen, goBack, returnToSeries])
 
+  if (route.screen === 'remote') return <Remote catalog={catalog} goBack={() => goBack('/')} />
   if (loading && !catalog) return <StateScreen loading eyebrow="FRAME / LIBRARY" title="Preparing your library" description="Your collection will be ready in a moment." />
   if (error && !catalog && route.screen !== 'downloads') return <StateScreen eyebrow="LIBRARY OFFLINE" title="We couldn’t reach your library" description="Check that the server is running, then try again." action={<Button focusKey="catalog-retry" onClick={reload}>Try again</Button>} />
   if (route.screen === 'downloads') return <Downloads navigate={navigate} goBack={goBack} />
