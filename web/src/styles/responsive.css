@@ -22,6 +22,7 @@
   .feature-copy h2 { font-size: 40px; }
   .feature-copy p { font-size: 13px; }
   .feature-index { display: none; }
+  .remote-entry { width: 100%; min-height: 52px; margin: -20px 0 36px; font-size: 15px; }
   .series-grid, .continue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .continue-section { padding-bottom: 40px; }
   .continue-copy { min-height: 94px; padding: 12px; }
