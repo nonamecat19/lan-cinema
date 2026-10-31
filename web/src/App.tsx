@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { Button, StateScreen } from './components/Chrome'
 import { useCatalog } from './hooks/useCatalog'
 import { rememberFocus, useRemoteNavigation } from './remote/useRemoteNavigation'
@@ -25,6 +25,9 @@ export function App() {
   useFullscreen(route.screen === 'watch')
   const initialFocusKey = route.screen === 'home' ? 'featured-series' : route.screen === 'downloads' ? 'upload-torrent' : route.screen === 'series' && series ? `season-${series.id}-${readSelectedSeason(series)}` : undefined
   useRemoteNavigation(!playerReady, path, initialFocusKey)
+  const navigationCommands = useMemo(() => commands.filter((command) => command.type === 'playEpisode' || command.type === 'stop'), [commands])
+  const latestNavigationCommand = navigationCommands[navigationCommands.length - 1]
+  const currentCommands = commands.filter((command) => (command.type !== 'playEpisode' && command.type !== 'stop') || command.id === latestNavigationCommand?.id)
 
   const returnToSeries = useCallback(() => {
     if (found) {
@@ -35,27 +38,24 @@ export function App() {
   }, [found, goBack])
 
   useEffect(() => {
-    for (const command of commands) {
-      if (command.type === 'playEpisode') {
-        if (!catalog) continue
-        const target = findEpisode(catalog.series, command.episodeId)
-        if (!target || target.episode.status !== 'ready') {
-          acknowledgeCommand(command.id)
-        } else if (route.screen !== 'watch' || route.id !== command.episodeId) {
-          navigate(`/watch/${encodeURIComponent(command.episodeId)}`)
-          break
-        }
-      } else if (command.type === 'stop') {
-        if (found) {
-          writeSelectedSeason(found.series.id, found.season.number)
-          rememberFocus(`/series/${found.series.id}`, `episode-${found.episode.id}`)
-          navigate(`/series/${encodeURIComponent(found.series.id)}`, true)
-        }
-        acknowledgeCommand(command.id)
-        break
+    for (const command of navigationCommands.slice(0, -1)) acknowledgeCommand(command.id)
+    if (latestNavigationCommand?.type === 'playEpisode') {
+      if (!catalog) return
+      const target = findEpisode(catalog.series, latestNavigationCommand.episodeId)
+      if (!target || target.episode.status !== 'ready') {
+        acknowledgeCommand(latestNavigationCommand.id)
+      } else if (route.screen !== 'watch' || route.id !== latestNavigationCommand.episodeId) {
+        navigate(`/watch/${encodeURIComponent(latestNavigationCommand.episodeId)}`)
       }
+    } else if (latestNavigationCommand?.type === 'stop') {
+      if (found) {
+        writeSelectedSeason(found.series.id, found.season.number)
+        rememberFocus(`/series/${found.series.id}`, `episode-${found.episode.id}`)
+        navigate(`/series/${encodeURIComponent(found.series.id)}`, true)
+      }
+      acknowledgeCommand(latestNavigationCommand.id)
     }
-  }, [commands, catalog, route, found, navigate, acknowledgeCommand])
+  }, [navigationCommands, catalog, route, found, navigate, acknowledgeCommand])
 
   useEffect(() => {
     if (playerReady) return
@@ -78,7 +78,7 @@ export function App() {
   if (error && !catalog && route.screen !== 'downloads') return <StateScreen eyebrow="LIBRARY OFFLINE" title="We couldn’t reach your library" description="Check that the server is running, then try again." action={<Button focusKey="catalog-retry" onClick={reload}>Try again</Button>} />
   if (route.screen === 'downloads') return <Downloads navigate={navigate} goBack={goBack} />
   if (route.screen === 'series') return series ? <Series key={series.id} series={series} navigate={navigate} goBack={goBack} reload={reload} /> : <StateScreen eyebrow="SERIES NOT FOUND" title="This series is unavailable" action={<Button focusKey="series-missing-back" onClick={() => goBack('/')}>Browse library</Button>} />
-  if (route.screen === 'watch') return playerReady ? <Player key={found.episode.id} {...found} navigate={navigate} back={returnToSeries} remoteCommands={commands} acknowledgeRemoteCommand={acknowledgeCommand} reportPlaybackState={reportPlaybackState} /> : <UnavailableEpisode episode={found?.episode} navigate={returnToSeries} />
+  if (route.screen === 'watch') return playerReady ? <Player key={found.episode.id} {...found} navigate={navigate} back={returnToSeries} remoteCommands={currentCommands} acknowledgeRemoteCommand={acknowledgeCommand} reportPlaybackState={reportPlaybackState} /> : <UnavailableEpisode episode={found?.episode} navigate={returnToSeries} />
   if (!catalog?.series.length) return <StateScreen eyebrow="YOUR LIBRARY" title="Nothing here yet" description="Add a series to your library or download one to get started." action={<Button focusKey="empty-downloads" onClick={() => navigate('/downloads')}>Open downloads</Button>} />
   return <Library series={catalog.series} navigate={navigate} />
 }

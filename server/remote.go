@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -48,14 +50,19 @@ type remoteSession struct {
 }
 
 type RemoteManager struct {
-	mu          sync.Mutex
-	displays    map[string]*remoteSession
-	nextLabel   uint64
-	nextCommand uint64
+	mu               sync.Mutex
+	displays         map[string]*remoteSession
+	nextLabel        uint64
+	nextCommand      uint64
+	commandNamespace string
 }
 
 func NewRemoteManager() *RemoteManager {
-	return &RemoteManager{displays: make(map[string]*remoteSession)}
+	var namespace [16]byte
+	if _, err := rand.Read(namespace[:]); err != nil {
+		panic(fmt.Errorf("generate remote command namespace: %w", err))
+	}
+	return &RemoteManager{displays: make(map[string]*remoteSession), commandNamespace: hex.EncodeToString(namespace[:])}
 }
 
 func (manager *RemoteManager) prune(now time.Time) {
@@ -151,7 +158,7 @@ func (manager *RemoteManager) Enqueue(id string, payload RemoteCommandPayload) e
 	}
 	manager.nextCommand++
 	session.commands = append(session.commands, RemoteCommand{
-		ID:                   fmt.Sprintf("command-%d", manager.nextCommand),
+		ID:                   fmt.Sprintf("command-%s-%d", manager.commandNamespace, manager.nextCommand),
 		RemoteCommandPayload: payload,
 	})
 	return nil

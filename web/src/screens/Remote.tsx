@@ -9,6 +9,12 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))
 }
 
+function displayEpisode(episodeId: string | null, series: Catalog['series']): string {
+  if (!episodeId) return 'Idle'
+  const current = findEpisode(series, episodeId)
+  return current ? `${current.series.title} · S${pad(current.season.number)} E${pad(current.episode.number)} · ${current.episode.title}` : `Episode ${episodeId}`
+}
+
 export function Remote({ catalog, goBack }: { catalog: Catalog | null; goBack: () => void }) {
   const { status, displays, selectedDisplay, selectedId, showChooser, commandError, selectDisplay, openChooser, refresh, sendCommand } = useRemoteController(catalog)
   const [selectedSeriesId, setSelectedSeriesId] = useState('')
@@ -68,9 +74,9 @@ export function Remote({ catalog, goBack }: { catalog: Catalog | null; goBack: (
       <div className="remote-display-heading"><div><span className="eyebrow">SELECTED TV</span><h2>{targetName}</h2></div><span className={`remote-connection remote-connection-${status}`}>{status === 'connected' ? 'Connected' : status === 'disconnected' ? 'Disconnected' : selectedId ? 'Connecting' : 'Searching'}</span></div>
       {selectedId && <div className="remote-display-actions"><button type="button" className="button secondary" onClick={refresh}>Retry connection</button><button type="button" className="button secondary" onClick={openChooser}>Change TV</button></div>}
       {!selectedId && status === 'discovering' && <p>Looking for TVs on this network…</p>}
-      {!selectedId && status === 'noDisplays' && <p>Open Frame on your TV and keep it on. This page will find it automatically.</p>}
+      {!selectedId && status === 'noDisplays' && <><p>Open Frame on your TV and keep it on. This page will find it automatically.</p><div className="remote-display-actions"><button type="button" className="button secondary" onClick={refresh}>Retry search</button></div></>}
       {status === 'disconnected' && <p>This TV is offline. Turn it on, then retry, or choose another TV.</p>}
-      {choose && <div className="remote-chooser"><h3>Choose a TV</h3>{displays.length ? <div className="remote-display-list">{displays.map((display) => <button type="button" className="button secondary" key={display.id} onClick={() => selectDisplay(display.id)}>{display.label}{display.id === selectedId ? ' · selected' : ''}</button>)}</div> : <p>No active TVs found. Open Frame on your TV and keep this page open.</p>}</div>}
+      {choose && <div className="remote-chooser"><h3>Choose a TV</h3>{displays.length ? <div className="remote-display-list">{displays.map((display) => <button type="button" className="button secondary" key={display.id} onClick={() => selectDisplay(display.id)}>{display.label}{display.id === selectedId ? ' · selected' : ''} · {displayEpisode(display.state.episodeId, series)}</button>)}</div> : <p>No active TVs found. Open Frame on your TV and keep this page open.</p>}</div>}
     </section>
     <section className="remote-now-playing"><span className="eyebrow">NOW ON TV</span><h2>{current ? `${current.series.title} · S${pad(current.season.number)} E${pad(current.episode.number)} · ${current.episode.title}` : playback?.episodeId ? 'Episode on TV' : 'Nothing playing'}</h2><p>{formatTime(playback?.position || 0)} / {formatTime(playback?.duration || 0)} · {playback?.playing ? 'Playing' : 'Paused'}</p>{playback?.error && <p role="alert">TV error: {playback.error}</p>}{commandError && <p role="alert">{commandError}</p>}</section>
     <section className="remote-picker" aria-label="Choose an episode"><h2>Play on TV</h2><div className="remote-selects"><label>Series<select value={selectedSeriesId} onChange={(event) => changeSeries(event.target.value)} disabled={!series.length}>{series.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label><label>Season<select value={selectedSeasonNumber ?? ''} onChange={(event) => changeSeason(Number(event.target.value))} disabled={!seasons.length}>{seasons.map((season) => <option key={season.number} value={season.number}>Season {season.number}</option>)}</select></label><label>Episode<select value={selectedEpisodeId} onChange={(event) => setSelectedEpisodeId(event.target.value)} disabled={!episodes.length}>{episodes.map((episode) => <option key={episode.id} value={episode.id}>Episode {episode.number}: {episode.title}{episode.status !== 'ready' ? ` (${episode.status})` : ''}</option>)}</select></label></div><button type="button" className="button remote-play" disabled={!connected || selectedEpisode?.status !== 'ready'} onClick={() => send({ type: 'playEpisode', episodeId: selectedEpisodeId })}>Play on TV</button>{selectedEpisode && selectedEpisode.status !== 'ready' && <p>This episode is {selectedEpisode.status} and cannot play yet.</p>}</section>

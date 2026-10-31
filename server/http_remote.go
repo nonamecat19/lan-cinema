@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -149,9 +150,33 @@ func (app *App) remoteCommandHandler(writer http.ResponseWriter, request *http.R
 
 func decodeRemoteCommand(data json.RawMessage) (RemoteCommandPayload, error) {
 	invalid := errors.New("invalid remote command")
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return RemoteCommandPayload{}, err
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return RemoteCommandPayload{}, invalid
+	}
+	fields := make(map[string]json.RawMessage)
+	for decoder.More() {
+		keyToken, err := decoder.Token()
+		key, ok := keyToken.(string)
+		if err != nil || !ok {
+			return RemoteCommandPayload{}, invalid
+		}
+		if _, exists := fields[key]; exists {
+			return RemoteCommandPayload{}, invalid
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return RemoteCommandPayload{}, invalid
+		}
+		fields[key] = value
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') {
+		return RemoteCommandPayload{}, invalid
+	}
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
+		return RemoteCommandPayload{}, invalid
 	}
 	var commandType string
 	if err := json.Unmarshal(fields["type"], &commandType); err != nil {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent } from 'react'
 import { Button, StateScreen } from '../components/Chrome'
 import type { Episode, EpisodeLocation, EpisodeWithSeason } from '../domain/media'
@@ -36,6 +36,8 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
   const ended = useRef(false)
   const handledRemoteCommands = useRef<Set<string>>(new Set())
   const pendingRemoteCommands = useRef<Set<string>>(new Set())
+  const activePlayCommand = useRef<string | null>(null)
+  const currentRemoteCommands = useRef(remoteCommands)
   const [error, setError] = useState(false)
   const [mediaReady, setMediaReady] = useState(false)
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
@@ -48,6 +50,10 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
   const [countdown, setCountdown] = useState<number | null>(null)
   const overlay = error || autoplayBlocked || countdown !== null
   useRemoteNavigation(overlay, `player-${episode.id}-${error}-${autoplayBlocked}-${countdown !== null}`)
+
+  useLayoutEffect(() => {
+    currentRemoteCommands.current = remoteCommands
+  }, [remoteCommands])
 
   const publishPlaybackState = useCallback((playbackError: string | null = error ? 'Playback stopped' : null) => {
     const video = videoRef.current
@@ -153,27 +159,32 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
     const video = videoRef.current
     if (!video || !mediaReady) return
     const startPlayback = (id: string) => {
+      activePlayCommand.current = id
       pendingRemoteCommands.current.add(id)
       void video.play().then(() => {
         pendingRemoteCommands.current.delete(id)
         if (videoRef.current !== video) return
         handledRemoteCommands.current.add(id)
-        setAutoplayBlocked(false)
         acknowledgeRemoteCommand(id)
+        if (activePlayCommand.current === id) {
+          setError(false)
+          setAutoplayBlocked(false)
+        }
       }).catch(() => {
         pendingRemoteCommands.current.delete(id)
-        if (videoRef.current === video) setError(true)
+        if (videoRef.current === video && activePlayCommand.current === id && currentRemoteCommands.current.some((command) => command.id === id)) setError(true)
       })
     }
     for (const command of remoteCommands) {
       if (handledRemoteCommands.current.has(command.id)) continue
-      if (pendingRemoteCommands.current.has(command.id)) return
+      if (pendingRemoteCommands.current.has(command.id)) continue
       switch (command.type) {
         case 'setPlaying':
           if (command.playing) {
             startPlayback(command.id)
-            return
+            continue
           }
+          activePlayCommand.current = null
           video.pause()
           break
         case 'playEpisode':
@@ -185,7 +196,7 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
           setCountdown(null)
           setNextEpisode(null)
           startPlayback(command.id)
-          return
+          continue
         case 'seek':
           if (!Number.isFinite(video.duration)) return
           seekTo(command.position)
