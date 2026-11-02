@@ -1,0 +1,38 @@
+.remote-screen { width: 100%; max-width: 680px; margin-inline: auto; gap: 20px; padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+.app-shell.remote-screen { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+.remote-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.remote-header .button { min-width: 88px; }
+.remote-header .eyebrow { text-align: right; }
+.remote-heading h1 { margin: 0 0 8px; font-size: clamp(32px, 8vw, 48px); letter-spacing: -.06em; line-height: 1.05; }
+.remote-heading p, .remote-display p, .remote-now-playing p, .remote-picker p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.remote-display, .remote-now-playing, .remote-picker, .remote-controls { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.remote-display-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.remote-display-heading > div { min-width: 0; }
+.remote-display-heading h2, .remote-now-playing h2 { margin: 6px 0 0; overflow-wrap: anywhere; font-size: 22px; line-height: 1.2; }
+.remote-connection { flex: none; padding: 6px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.remote-connection-connected { border-color: rgba(200, 245, 140, .5); background: rgba(200, 245, 140, .1); color: var(--accent); }
+.remote-connection-disconnected { border-color: rgba(255, 180, 162, .5); background: rgba(255, 180, 162, .1); color: var(--danger); }
+.remote-display-actions, .remote-display-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.remote-display-actions .button, .remote-display-list .button { min-width: 0; min-height: 48px; white-space: normal; }
+.remote-chooser { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+.remote-chooser h3 { margin: 0; font-size: 16px; }
+.remote-display-list { grid-template-columns: 1fr; }
+.remote-display-list .button { justify-content: flex-start; text-align: left; }
+.remote-now-playing h2 { margin: 0; }
+.remote-now-playing [role="alert"] { color: var(--danger); }
+.remote-picker h2, .remote-controls h2 { margin: 0; font-size: 21px; }
+.remote-selects { display: grid; gap: 14px; }
+.remote-selects label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.remote-selects select { width: 100%; min-width: 0; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font: inherit; }
+.remote-selects select:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.remote-selects select:disabled { opacity: .46; }
+.remote-play { width: 100%; min-height: 52px; font-size: 15px; }
+.remote-control-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.remote-control-grid button { min-width: 44px; min-height: 56px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); color: var(--text); font-size: 12px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.remote-control-grid button:not(:disabled):hover { border-color: var(--accent); background: rgba(200, 245, 140, .1); }
+
+@media (max-width: 380px) {
+  .remote-screen { gap: 16px; }
+  .remote-display, .remote-now-playing, .remote-picker, .remote-controls { padding: 16px; }
+  .remote-display-heading { flex-direction: column; }
+}

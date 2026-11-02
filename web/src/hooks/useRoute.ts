@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export type Screen = 'home' | 'downloads' | 'series' | 'watch'
-export type Route = { screen: 'home' } | { screen: 'downloads' } | { screen: 'series'; id: string } | { screen: 'watch'; id: string }
+export type Screen = 'home' | 'downloads' | 'series' | 'watch' | 'remote'
+export type Route = { screen: 'home' } | { screen: 'downloads' } | { screen: 'series'; id: string } | { screen: 'watch'; id: string } | { screen: 'remote' }
 export type Navigate = (path: string, replace?: boolean) => void
 export type GoBack = (fallback: string) => void
 
@@ -16,6 +16,7 @@ function isAppHistoryState(value: unknown): value is AppHistoryState {
 
 export function parseRoute(path: string): Route {
   if (path === '/downloads') return { screen: 'downloads' }
+  if (path === '/remote') return { screen: 'remote' }
   const match = path.match(/^\/(series|watch)\/([^/]+)$/)
   if (!match) return { screen: 'home' }
   let id: string

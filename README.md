@@ -34,6 +34,10 @@ MEDIA_ROOT=/srv/media/series CACHE_DIR=/var/cache/tv-streamer PORT=8080 ./tv-str
 
 Open the LAN URL printed by the server in the TV browser. The listening port must be reachable over the trusted LAN. Do not forward it to the internet; the app has no authentication.
 
+To use a phone as a TV remote, open the same LAN URL on the phone while the app is open in the TV browser. Connect both devices to the same trusted local network. Tap **TV remote mode** on the phone home screen. One active TV connects automatically; if several are active, choose the TV to control. If none appear, keep the app open on the TV and wait for discovery.
+
+In **TV remote mode**, choose a series, season, and episode, then tap **Play on TV**. Episodes still preparing or unavailable cannot be started. The phone shows the selected TV and its current playback state. Use its controls to pause or resume, seek ten seconds, change episodes, stop, mute, or adjust the TV browser's volume. If the TV disconnects, reopen it and tap **Retry connection**, or use **Change TV** to select a different screen. The phone keeps its selected TV between visits and does not switch to another TV automatically.
+
 The startup scan recognizes series directories containing `Season NN` directories and files named `SNNENN - Title` with MP4, MKV, AVI, MOV, M4V, or WebM extensions. Manually added files are picked up after a server restart. Completed torrent downloads are imported and added to the catalog automatically. Unsupported codecs are prepared as 8-bit H.264/AAC MP4 in the cache. The library opens after scanning while media preparation continues in the background. Episode rows show probing, remuxing, conversion, validation, and failure status.
 
 Progress is stored in each browser's local storage and is not synchronized between devices. Unfinished episodes appear in the Continue watching shelf, ordered by the most recent playback. Media preparation writes only to the separate cache. Torrent imports create normalized copies or hard links in the library while preserving the originals for seeding.

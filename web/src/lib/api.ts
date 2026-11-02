@@ -1,6 +1,7 @@
 import { parseResponse, responseGuards } from '../domain/parse'
 import type { Catalog } from '../domain/media'
 import type { TorrentDownload, TorrentSelection, TorrentSource } from '../domain/downloads'
+import type { RemoteCommandPayload, RemoteDisplay, RemotePlaybackState, RemoteSyncResponse } from '../domain/remote'
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -42,5 +43,22 @@ export const api = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sourceId, seasons }),
+  }),
+  registerRemoteDisplay: (id: string): Promise<RemoteDisplay> => request('/api/remote/displays', responseGuards.remoteDisplay, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  }),
+  remoteDisplays: (): Promise<RemoteDisplay[]> => request('/api/remote/displays', responseGuards.remoteDisplays, { cache: 'no-store' }),
+  remoteDisplay: (id: string): Promise<RemoteDisplay> => request(`/api/remote/displays/${encodeURIComponent(id)}`, responseGuards.remoteDisplay, { cache: 'no-store' }),
+  syncRemoteDisplay: (id: string, state: RemotePlaybackState, acknowledgedIDs: string[]): Promise<RemoteSyncResponse> => request(`/api/remote/displays/${encodeURIComponent(id)}/sync`, responseGuards.remoteSync, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state, acknowledgedIds: acknowledgedIDs }),
+  }),
+  sendRemoteCommand: (id: string, command: RemoteCommandPayload): Promise<{ queued: true }> => request(`/api/remote/displays/${encodeURIComponent(id)}/commands`, responseGuards.remoteCommandQueued, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(command),
   }),
 }

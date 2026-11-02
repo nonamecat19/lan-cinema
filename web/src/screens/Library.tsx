@@ -4,6 +4,7 @@ import type { Navigate } from '../hooks/useRoute'
 import { allEpisodes, artworkFor, episodeCount } from '../lib/catalog'
 import { formatTime, pad } from '../lib/format'
 import { continueWatchingItems } from '../lib/progress'
+import { isMobileDevice } from '../remote/device'
 
 function greeting() {
   const hour = new Date().getHours()
@@ -38,6 +39,7 @@ export function Library({ series, navigate }: { series: Series[]; navigate: Navi
         <Button focusKey="featured-series" onClick={() => navigate(featured ? `/watch/${featured.episode.id}` : `/series/${heroSeries.id}`)}>{featured ? '▶ Resume episode' : 'Explore series'} <span aria-hidden="true">↗</span></Button>
       </div><span className="feature-index">FEATURED / {pad(sorted.indexOf(heroSeries) + 1)}</span>
     </section>
+    {isMobileDevice() && <button type="button" className="button remote-entry" onClick={() => navigate('/remote')}>TV remote mode</button>}
     {inProgress.length > 0 && <section className="continue-section" aria-label="Continue watching"><div className="section-heading"><div><span className="eyebrow">PICK UP WHERE YOU LEFT OFF</span><h2>Continue watching</h2></div><span className="episode-count">{pad(inProgress.length)} IN PROGRESS</span></div><div className="continue-grid">{inProgress.slice(0, 8).map(({ show, episode, progress }) => <button type="button" key={episode.id} className="continue-card" data-focusable="true" data-focus-key={`continue-${episode.id}`} onClick={() => navigate(`/watch/${episode.id}`)}><span className="continue-art">{episode.previewUrl && <img src={episode.previewUrl} alt="" loading="lazy" />}<span className="continue-play" aria-hidden="true">▶</span></span><span className="continue-copy"><strong>{show.title}</strong><span>S{pad(episode.seasonNumber)} E{pad(episode.number)} · {episode.title}</span><small>{formatTime(Math.max(0, (episode.durationSeconds || progress.duration) - progress.position))} left</small></span><span className="continue-progress"><i style={{ width: `${Math.min(100, progress.position / (episode.durationSeconds || progress.duration) * 100)}%` }} /></span></button>)}</div></section>}
     <section className="collection"><div className="section-heading"><div><span className="eyebrow">BROWSE COLLECTION</span><h2>All series</h2></div><span className="episode-count">{pad(series.length)} TITLES · A—Z</span></div>
       <div className="series-grid">{sorted.map((show, index) => <SeriesCard key={show.id} series={show} index={index} onOpen={() => navigate(`/series/${show.id}`)} />)}</div>

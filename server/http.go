@@ -19,6 +19,7 @@ type App struct {
 	mediaRoot    string
 	cacheDir     string
 	torrents     *TorrentManager
+	remote       *RemoteManager
 	refreshMu    sync.Mutex
 	catalogMu    sync.Mutex
 	active       map[string]string
@@ -26,7 +27,7 @@ type App struct {
 }
 
 func NewApp(webDir string) *App {
-	return &App{webDir: webDir, active: make(map[string]string), prepareSlots: make(chan struct{}, 2)}
+	return &App{webDir: webDir, active: make(map[string]string), prepareSlots: make(chan struct{}, 2), remote: NewRemoteManager()}
 }
 
 func (app *App) SetCatalog(catalog *Catalog) {
@@ -38,6 +39,8 @@ func (app *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", app.health)
 	mux.HandleFunc("/api/catalog", app.catalogHandler)
+	mux.HandleFunc("/api/remote/displays", app.remoteDisplaysHandler)
+	mux.HandleFunc("/api/remote/displays/", app.remoteDisplayHandler)
 	mux.HandleFunc("/api/torrents", app.torrentsHandler)
 	mux.HandleFunc("/api/torrents/", app.torrentHandler)
 	mux.HandleFunc("/api/downloads", app.downloadsHandler)

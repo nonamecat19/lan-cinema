@@ -1,5 +1,6 @@
 import type { Catalog, Episode, EpisodeStatus, Season, Series, TorrentSeriesSource } from './media'
 import type { TorrentDownload, TorrentDownloadFile, TorrentFile, TorrentSelection, TorrentSource } from './downloads'
+import type { RemoteCommand, RemoteDisplay, RemotePlaybackState, RemoteSyncResponse } from './remote'
 
 type RecordValue = Record<string, unknown>
 const episodeStatuses: ReadonlySet<string> = new Set(['ready', 'preparing', 'queued', 'unavailable'])
@@ -68,6 +69,43 @@ function torrentDownload(value: unknown): value is TorrentDownload {
   return record(value) && string(value.hash) && string(value.name) && number(value.progress) && string(value.state) && number(value.downloadSpeed) && number(value.uploadSpeed) && number(value.eta) && number(value.size) && number(value.completed) && typeof value.paused === 'boolean' && array(value.files, torrentDownloadFile)
 }
 
+function remoteID(value: unknown): value is string {
+  return string(value) && /^[A-Za-z0-9_-]{1,128}$/.test(value)
+}
+
+function nonemptyString(value: unknown): value is string {
+  return string(value) && value.trim().length > 0
+}
+
+function nonnegativeNumber(value: unknown): value is number {
+  return number(value) && value >= 0
+}
+
+function unitNumber(value: unknown): value is number {
+  return number(value) && value >= 0 && value <= 1
+}
+
+function remotePlaybackState(value: unknown): value is RemotePlaybackState {
+  return record(value) && (value.episodeId === null || remoteID(value.episodeId)) && typeof value.playing === 'boolean' && nonnegativeNumber(value.position) && nonnegativeNumber(value.duration) && unitNumber(value.volume) && typeof value.muted === 'boolean' && nullableString(value.error)
+}
+
+function remoteCommand(value: unknown): value is RemoteCommand {
+  if (!record(value) || !remoteID(value.id)) return false
+  switch (value.type) {
+    case 'playEpisode': return Object.keys(value).length === 3 && nonemptyString(value.episodeId)
+    case 'setPlaying': return Object.keys(value).length === 3 && typeof value.playing === 'boolean'
+    case 'seek': return Object.keys(value).length === 3 && nonnegativeNumber(value.position)
+    case 'setMuted': return Object.keys(value).length === 3 && typeof value.muted === 'boolean'
+    case 'setVolume': return Object.keys(value).length === 3 && unitNumber(value.volume)
+    case 'stop': return Object.keys(value).length === 2
+    default: return false
+  }
+}
+
+function remoteDisplay(value: unknown): value is RemoteDisplay {
+  return record(value) && remoteID(value.id) && nonemptyString(value.label) && remotePlaybackState(value.state)
+}
+
 export function parseResponse<T>(value: unknown, guard: (item: unknown) => item is T): T {
   if (!guard(value)) throw new Error('The server returned an unexpected response')
   return value
@@ -80,4 +118,8 @@ export const responseGuards = {
   torrentSelection,
   downloads: (value: unknown): value is TorrentDownload[] => array(value, torrentDownload),
   accepted: (value: unknown): value is RecordValue => record(value),
+  remoteDisplay,
+  remoteDisplays: (value: unknown): value is RemoteDisplay[] => array(value, remoteDisplay),
+  remoteSync: (value: unknown): value is RemoteSyncResponse => record(value) && array(value.commands, remoteCommand),
+  remoteCommandQueued: (value: unknown): value is { queued: true } => record(value) && value.queued === true,
 }
