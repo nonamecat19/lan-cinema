@@ -2,7 +2,7 @@ package server
 
 import (
 	"bufio"
-	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -107,7 +107,12 @@ func convertEpisode(episode *Episode, cacheDir string, plan preparationPlan, upd
 		if plan.media.H264 {
 			stage = "Remuxing MP4"
 		}
-		if err := runConversion(conversionArgs(episode, plan.media, temporaryPath, device), plan.media.Duration, stage, report); err == nil {
+		mode := "software"
+		if device != "" {
+			mode = "vaapi"
+		}
+		stderr, conversionErr := runConversion(conversionArgs(episode, plan.media, temporaryPath, device), plan.media.Duration, stage, report)
+		if conversionErr == nil {
 			report("Validating playback", 99)
 			cached, probeErr := probe(temporaryPath)
 			fastStartNeeded, atomErr := needsFastStart(temporaryPath)
@@ -120,9 +125,28 @@ func convertEpisode(episode *Episode, cacheDir string, plan preparationPlan, upd
 				episode.Status = "ready"
 				return nil
 			}
+			validationDetail := "output validation failed"
+			switch {
+			case probeErr != nil:
+				validationDetail = "output probe failed: " + probeErr.Error()
+			case !cached.H264:
+				validationDetail = "output video codec is not H.264"
+			case !cached.AAC:
+				validationDetail = "output audio codec is not AAC"
+			case atomErr != nil:
+				validationDetail = "fast-start validation failed: " + atomErr.Error()
+			case fastStartNeeded:
+				validationDetail = "output is missing fast-start metadata"
+			}
+			log.Printf("ffmpeg output validation failed episode=%s mode=%s detail=%q", episode.ID, mode, ffmpegDiagnostic(validationDetail, episode.SourcePath, temporaryPath))
+		} else {
+			diagnostic := ffmpegDiagnostic(stderr, episode.SourcePath, temporaryPath)
+			if diagnostic == "" {
+				diagnostic = ffmpegDiagnostic(conversionErr.Error(), episode.SourcePath, temporaryPath)
+			}
+			log.Printf("ffmpeg conversion failed episode=%s mode=%s detail=%q", episode.ID, mode, diagnostic)
 		}
 		if device == "" {
-			log.Printf("media preparation failed for episode %s", episode.ID)
 			return fmt.Errorf("Unable to prepare browser-compatible MP4")
 		}
 		log.Printf("hardware encoding failed for episode %s; retrying in software", episode.ID)
@@ -175,16 +199,16 @@ func conversionArgs(episode *Episode, media mediaInfo, temporaryPath, device str
 	return args
 }
 
-func runConversion(args []string, duration int64, stage string, report func(string, int)) error {
+func runConversion(args []string, duration int64, stage string, report func(string, int)) (string, error) {
 	command := exec.Command("ffmpeg", args...)
 	output, err := command.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Unable to prepare MP4 for streaming")
+		return "", err
 	}
-	var errorOutput bytes.Buffer
-	command.Stderr = &errorOutput
+	errorOutput := &ffmpegErrorBuffer{}
+	command.Stderr = errorOutput
 	if err := command.Start(); err != nil {
-		return fmt.Errorf("Unable to prepare MP4 for streaming")
+		return errorOutput.String(), err
 	}
 	report(stage, 0)
 	scanner := bufio.NewScanner(output)
@@ -207,17 +231,53 @@ func runConversion(args []string, duration int64, stage string, report func(stri
 			report(stage, progress)
 		}
 	}
-	if err := command.Wait(); err != nil || scanner.Err() != nil {
-		return fmt.Errorf("Unable to prepare MP4 for streaming")
+	if err := command.Wait(); err != nil {
+		return errorOutput.String(), err
 	}
-	return nil
+	if err := scanner.Err(); err != nil {
+		return errorOutput.String(), err
+	}
+	return errorOutput.String(), nil
+}
+
+type ffmpegErrorBuffer struct {
+	data []byte
+}
+
+func (buffer *ffmpegErrorBuffer) Write(data []byte) (int, error) {
+	const limit = 2048
+	written := len(data)
+	if len(data) >= limit {
+		buffer.data = append(buffer.data[:0], data[len(data)-limit:]...)
+		return written, nil
+	}
+	overflow := len(buffer.data) + len(data) - limit
+	if overflow > 0 {
+		copy(buffer.data, buffer.data[overflow:])
+		buffer.data = buffer.data[:len(buffer.data)-overflow]
+	}
+	buffer.data = append(buffer.data, data...)
+	return written, nil
+}
+
+func (buffer *ffmpegErrorBuffer) String() string {
+	return string(buffer.data)
+}
+
+func ffmpegDiagnostic(output string, paths ...string) string {
+	for _, path := range paths {
+		if path != "" {
+			output = strings.ReplaceAll(output, path, "<file>")
+		}
+	}
+	output = strings.Join(strings.Fields(output), " ")
+	if len(output) > 2048 {
+		output = output[len(output)-2048:]
+	}
+	return output
 }
 
 func removeStaleCache(cacheDir string, episodes []episodeFile) error {
-	ids := make(map[string]struct{}, len(episodes))
-	for _, episode := range episodes {
-		ids[episode.id] = struct{}{}
-	}
 	entries, err := os.ReadDir(cacheDir)
 	if err != nil {
 		return err
@@ -233,17 +293,56 @@ func removeStaleCache(cacheDir string, episodes []episodeFile) error {
 			continue
 		}
 		name := entry.Name()
-		for id := range ids {
-			if !strings.HasPrefix(name, id+"-") {
-				continue
+		id := ""
+		for currentID := range current {
+			if strings.HasPrefix(name, currentID+"-") {
+				id = currentID
+				break
 			}
-			middle, sheet := previewPaths(cacheDir, id, current[id])
-			keep := current[id] != "" && (name == filepath.Base(cachePath(cacheDir, id, current[id])) || name == filepath.Base(middle) || name == filepath.Base(sheet))
-			if !keep && (strings.HasSuffix(name, ".mp4") || strings.HasSuffix(name, ".tmp") || strings.HasSuffix(name, ".jpg")) {
-				if err := os.Remove(filepath.Join(cacheDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
-					return err
-				}
+		}
+		if id == "" && episodeArtifact(name) {
+			id = name[:64]
+		}
+		if id == "" || !artifactExtension(name) {
+			continue
+		}
+		middle, sheet := previewPaths(cacheDir, id, current[id])
+		keep := current[id] != "" && (name == filepath.Base(cachePath(cacheDir, id, current[id])) || name == filepath.Base(middle) || name == filepath.Base(sheet))
+		if !keep {
+			if err := os.Remove(filepath.Join(cacheDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
 			}
+		}
+	}
+	return nil
+}
+
+func episodeArtifact(name string) bool {
+	if len(name) < 66 || name[64] != '-' {
+		return false
+	}
+	if _, err := hex.DecodeString(name[:64]); err != nil {
+		return false
+	}
+	return artifactExtension(name)
+}
+
+func artifactExtension(name string) bool {
+	return strings.HasSuffix(name, ".mp4") || strings.HasSuffix(name, ".tmp") || strings.HasSuffix(name, ".jpg")
+}
+
+func removeEpisodeArtifacts(cacheDir, id string) error {
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, id+"-") || !episodeArtifact(name) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(cacheDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
 		}
 	}
 	return nil

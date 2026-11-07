@@ -115,7 +115,12 @@ func (app *App) runPreparation(episode Episode) {
 		if app.active[episode.ID] == episode.Fingerprint {
 			delete(app.active, episode.ID)
 		}
+		current := app.catalog.Load()
+		removed := current == nil || current.byID[episode.ID] == nil
 		app.catalogMu.Unlock()
+		if removed {
+			_ = removeEpisodeArtifacts(app.cacheDir, episode.ID)
+		}
 	}()
 	update := func(stage string, progress int) {
 		episode.PreparationStage = stage
