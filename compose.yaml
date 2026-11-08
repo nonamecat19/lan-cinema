@@ -20,7 +20,7 @@ services:
       - "${CACHE_HOST_PATH:-./cache}:/cache"
       - "${TORRENT_HOST_PATH:-.}:/torrent-files:ro"
       - "${TORRENT_EXTRA_HOST_PATH:-./torrent-files}:/extra-torrent-files:ro"
-      - "${DOWNLOAD_HOST_PATH:-./downloads}:/downloads:ro"
+      - "${DOWNLOAD_HOST_PATH:-./downloads}:/downloads"
     depends_on:
       - qbittorrent
   qbittorrent:

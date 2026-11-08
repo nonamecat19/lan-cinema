@@ -56,7 +56,7 @@ func TestLinkedTorrentOffersAndAddsAnotherSeason(t *testing.T) {
 	if len(manager.AvailableForSeries("Bones")[0].AvailableSeasons) != 0 {
 		t.Fatal("selected season is still offered")
 	}
-	if len(calls) != 2 || !strings.Contains(calls[0], "id=1") || !strings.Contains(calls[0], "priority=1") || !strings.Contains(calls[1], "/start") {
+	if len(calls) != 3 || !strings.Contains(calls[0], "id=1") || !strings.Contains(calls[0], "priority=1") || !strings.Contains(calls[1], "id=0") || !strings.Contains(calls[1], "priority=7") || !strings.Contains(calls[2], "/start") {
 		t.Fatalf("unexpected torrent client calls: %#v", calls)
 	}
 }

@@ -38,20 +38,36 @@ type TorrentFile struct {
 }
 
 type TorrentSelection struct {
-	SeriesTitle string        `json:"seriesTitle"`
-	Seasons     []int         `json:"seasons"`
-	Files       []TorrentFile `json:"files"`
+	SeriesTitle     string        `json:"seriesTitle"`
+	Seasons         []int         `json:"seasons"`
+	PausedSeasons   []int         `json:"pausedSeasons,omitempty"`
+	DeletingSeasons []int         `json:"deletingSeasons,omitempty"`
+	ForceOneByOne   bool          `json:"forceOneByOne"`
+	Files           []TorrentFile `json:"files"`
 }
 
 type TorrentSeasonOption struct {
-	Number   int `json:"number"`
-	Episodes int `json:"episodes"`
+	Number   int  `json:"number"`
+	Episodes int  `json:"episodes"`
+	Selected bool `json:"selected"`
+	Paused   bool `json:"paused"`
+	Deleting bool `json:"deleting"`
+}
+
+type TorrentSeriesEpisode struct {
+	Season int    `json:"season"`
+	Number int    `json:"number"`
+	Name   string `json:"name"`
 }
 
 type TorrentSeriesSource struct {
-	ID               string                `json:"id"`
-	Name             string                `json:"name"`
-	AvailableSeasons []TorrentSeasonOption `json:"availableSeasons"`
+	ID               string                 `json:"id"`
+	Hash             string                 `json:"hash"`
+	Name             string                 `json:"name"`
+	ForceOneByOne    bool                   `json:"forceOneByOne"`
+	Seasons          []TorrentSeasonOption  `json:"seasons"`
+	AvailableSeasons []TorrentSeasonOption  `json:"availableSeasons"`
+	Episodes         []TorrentSeriesEpisode `json:"episodes"`
 }
 
 type TorrentDownload struct {
@@ -73,6 +89,7 @@ type TorrentDownloadFile struct {
 	Name                string  `json:"name"`
 	Season              int     `json:"season"`
 	Episode             int     `json:"episode"`
+	Size                int64   `json:"size"`
 	Progress            float64 `json:"progress"`
 	Status              string  `json:"status"`
 	Detail              string  `json:"detail"`
@@ -88,6 +105,7 @@ type TorrentManager struct {
 	client       *http.Client
 	baseURL      string
 	statePath    string
+	operationMu  sync.Mutex
 	mu           sync.Mutex
 	selections   map[string]TorrentSelection
 	imported     map[string]bool
@@ -259,6 +277,8 @@ func (manager *TorrentManager) Inspect(id string) (TorrentSelection, error) {
 }
 
 func (manager *TorrentManager) Start(id string, selection TorrentSelection) error {
+	manager.operationMu.Lock()
+	defer manager.operationMu.Unlock()
 	source, err := manager.Source(id)
 	if err != nil {
 		return err
@@ -300,14 +320,18 @@ func (manager *TorrentManager) Start(id string, selection TorrentSelection) erro
 	if err := manager.filePriority(source.InfoHash, files, nil); err != nil {
 		return err
 	}
-	if err := manager.filePriority(source.InfoHash, files, selected); err != nil {
+	for i := range files {
+		files[i].Priority = 0
+	}
+	selection = TorrentSelection{SeriesTitle: seriesTitle, Seasons: selection.Seasons, ForceOneByOne: selection.ForceOneByOne, Files: files}
+	if err := manager.reconcilePriorities(source.InfoHash, selection, files); err != nil {
 		return err
 	}
 	if _, err := manager.postForm("/api/v2/torrents/start", url.Values{"hashes": {source.InfoHash}}); err != nil {
 		return err
 	}
 	manager.mu.Lock()
-	manager.selections[source.InfoHash] = TorrentSelection{SeriesTitle: seriesTitle, Seasons: selection.Seasons, Files: files}
+	manager.selections[source.InfoHash] = selection
 	manager.saveStateLocked()
 	manager.mu.Unlock()
 	return nil
@@ -334,26 +358,49 @@ func (manager *TorrentManager) AvailableForSeries(title string) []TorrentSeriesS
 		for _, season := range selection.Seasons {
 			selected[season] = true
 		}
+		paused := make(map[int]bool)
+		for _, season := range selection.PausedSeasons {
+			paused[season] = true
+		}
+		deleting := seasonSet(selection.DeletingSeasons)
 		counts := make(map[int]int)
+		episodes := make([]TorrentSeriesEpisode, 0)
 		for _, file := range selection.Files {
-			if selected[file.Season] || !supportedTorrentVideo(file.Name) {
+			if !supportedTorrentVideo(file.Name) {
 				continue
 			}
-			if season, _, _, err := parseTorrentEpisode(file.Name); err == nil && season == file.Season {
+			if season, number, _, err := parseTorrentEpisode(file.Name); err == nil && season == file.Season {
 				counts[season]++
+				episodes = append(episodes, TorrentSeriesEpisode{Season: season, Number: number, Name: file.Name})
 			}
 		}
-		item := TorrentSeriesSource{ID: source.ID, Name: source.DisplayName, AvailableSeasons: make([]TorrentSeasonOption, 0, len(counts))}
+		item := TorrentSeriesSource{ID: source.ID, Hash: source.InfoHash, Name: source.DisplayName, ForceOneByOne: selection.ForceOneByOne, Seasons: make([]TorrentSeasonOption, 0, len(counts)), AvailableSeasons: make([]TorrentSeasonOption, 0, len(counts)), Episodes: episodes}
 		for season, count := range counts {
-			item.AvailableSeasons = append(item.AvailableSeasons, TorrentSeasonOption{Number: season, Episodes: count})
+			option := TorrentSeasonOption{Number: season, Episodes: count, Selected: selected[season], Paused: paused[season], Deleting: deleting[season]}
+			item.Seasons = append(item.Seasons, option)
+			if !option.Selected {
+				item.AvailableSeasons = append(item.AvailableSeasons, option)
+			}
 		}
+		sort.Slice(item.Seasons, func(i, j int) bool { return item.Seasons[i].Number < item.Seasons[j].Number })
 		sort.Slice(item.AvailableSeasons, func(i, j int) bool { return item.AvailableSeasons[i].Number < item.AvailableSeasons[j].Number })
+		sort.Slice(item.Episodes, func(i, j int) bool {
+			if item.Episodes[i].Season != item.Episodes[j].Season {
+				return item.Episodes[i].Season < item.Episodes[j].Season
+			}
+			if item.Episodes[i].Number != item.Episodes[j].Number {
+				return item.Episodes[i].Number < item.Episodes[j].Number
+			}
+			return item.Episodes[i].Name < item.Episodes[j].Name
+		})
 		result = append(result, item)
 	}
 	return result
 }
 
 func (manager *TorrentManager) AddSeasons(sourceID, seriesTitle string, seasons []int) error {
+	manager.operationMu.Lock()
+	defer manager.operationMu.Unlock()
 	source, err := manager.Source(sourceID)
 	if err != nil {
 		return err
@@ -378,14 +425,12 @@ func (manager *TorrentManager) AddSeasons(sourceID, seriesTitle string, seasons 
 	if err != nil {
 		return err
 	}
-	indices := make([]int, 0)
 	available := make(map[int]bool)
 	for _, file := range files {
 		if !requested[file.Season] || !supportedTorrentVideo(file.Name) {
 			continue
 		}
 		if season, _, _, err := parseTorrentEpisode(file.Name); err == nil && season == file.Season {
-			indices = append(indices, file.Index)
 			available[season] = true
 		}
 	}
@@ -394,13 +439,6 @@ func (manager *TorrentManager) AddSeasons(sourceID, seriesTitle string, seasons 
 			return fmt.Errorf("season %d is not available in this torrent", season)
 		}
 	}
-	if err := manager.filePriority(source.InfoHash, files, indices); err != nil {
-		return err
-	}
-	if _, err := manager.postForm("/api/v2/torrents/start", url.Values{"hashes": {source.InfoHash}}); err != nil {
-		return err
-	}
-	manager.mu.Lock()
 	for season := range requested {
 		found := false
 		for _, existing := range selection.Seasons {
@@ -414,6 +452,13 @@ func (manager *TorrentManager) AddSeasons(sourceID, seriesTitle string, seasons 
 		}
 	}
 	sort.Ints(selection.Seasons)
+	if err := manager.reconcilePriorities(source.InfoHash, selection, files); err != nil {
+		return err
+	}
+	if _, err := manager.postForm("/api/v2/torrents/start", url.Values{"hashes": {source.InfoHash}}); err != nil {
+		return err
+	}
+	manager.mu.Lock()
 	selection.Files = files
 	manager.selections[source.InfoHash] = selection
 	manager.saveStateLocked()
@@ -456,18 +501,27 @@ func (manager *TorrentManager) Downloads(catalog *Catalog) ([]TorrentDownload, e
 			}
 		}
 		manager.mu.Unlock()
+		selectedSeasons := seasonSet(selection.Seasons)
+		pausedSeasons := seasonSet(selection.PausedSeasons)
+		deletingSeasons := seasonSet(selection.DeletingSeasons)
 		for _, file := range files {
-			if file.Priority == 0 || !supportedTorrentVideo(file.Name) {
+			if !selectedSeasons[file.Season] || !supportedTorrentVideo(file.Name) {
 				continue
 			}
 			season, episodeNumber, _, err := parseTorrentEpisode(file.Name)
 			if err != nil || season != file.Season {
 				continue
 			}
-			item := TorrentDownloadFile{Name: filepath.Base(file.Name), Season: season, Episode: episodeNumber, Progress: file.Progress, Status: "downloading", Detail: "Downloading from peers"}
+			item := TorrentDownloadFile{Name: filepath.Base(file.Name), Season: season, Episode: episodeNumber, Size: file.Size, Progress: file.Progress, Status: "downloading", Detail: "Downloading from peers"}
 			key := info.Hash + ":" + strconv.Itoa(file.Index)
-			if download.Paused && file.Progress < 0.999999 {
+			if deletingSeasons[season] {
+				item.Status, item.Detail = "delete-error", "Season delete needs retry"
+			} else if pausedSeasons[season] && file.Progress < 0.999999 {
+				item.Status, item.Detail = "paused", "Season paused"
+			} else if download.Paused && file.Progress < 0.999999 {
 				item.Status, item.Detail = "paused", "Download paused"
+			} else if file.Priority == 0 && file.Progress < 0.999999 {
+				item.Status, item.Detail = "waiting", "Waiting for an earlier season"
 			} else if file.Progress == 0 {
 				item.Status, item.Detail = "queued", "Waiting for peers"
 			} else if file.Progress >= 0.999999 {
@@ -485,9 +539,17 @@ func (manager *TorrentManager) Downloads(catalog *Catalog) ([]TorrentDownload, e
 						item.Status = found.Status
 						item.Detail = found.PreparationStage
 						item.PreparationProgress = found.PreparationProgress
+						if found.Status == "queued" || found.Status == "preparing" {
+							item.Status = "preparing"
+							if item.Detail == "" {
+								item.Detail = "Waiting to prepare"
+							}
+						}
 						if found.Status == "unavailable" {
 							item.Detail = dereference(found.UnavailableReason, "Media preparation failed")
 						}
+					} else {
+						item.Status, item.Detail = "import-error", "Episode missing from catalog; checking library file"
 					}
 				}
 			}
@@ -529,6 +591,8 @@ func findCatalogEpisode(catalog *Catalog, title string, season, number int) *Epi
 }
 
 func (manager *TorrentManager) Pause(hash string, pause bool) error {
+	manager.operationMu.Lock()
+	defer manager.operationMu.Unlock()
 	if !validInfoHash(hash) {
 		return os.ErrNotExist
 	}
@@ -541,6 +605,8 @@ func (manager *TorrentManager) Pause(hash string, pause bool) error {
 }
 
 func (manager *TorrentManager) Delete(hash string) error {
+	manager.operationMu.Lock()
+	defer manager.operationMu.Unlock()
 	if !validInfoHash(hash) {
 		return os.ErrNotExist
 	}
@@ -581,6 +647,7 @@ func (manager *TorrentManager) StartWatcher(refresh func() error) {
 		defer ticker.Stop()
 		pendingRefresh := false
 		for range ticker.C {
+			manager.reconcileAll()
 			if manager.importCompleted() {
 				pendingRefresh = true
 			}
@@ -592,6 +659,8 @@ func (manager *TorrentManager) StartWatcher(refresh func() error) {
 }
 
 func (manager *TorrentManager) importCompleted() bool {
+	manager.operationMu.Lock()
+	defer manager.operationMu.Unlock()
 	manager.mu.Lock()
 	selections := make(map[string]TorrentSelection, len(manager.selections))
 	for hash, selection := range manager.selections {
@@ -600,6 +669,8 @@ func (manager *TorrentManager) importCompleted() bool {
 	manager.mu.Unlock()
 	changed := false
 	for hash, selection := range selections {
+		selectedSeasons := seasonSet(selection.Seasons)
+		deletingSeasons := seasonSet(selection.DeletingSeasons)
 		info, err := manager.getTorrent(hash)
 		if err != nil {
 			continue
@@ -609,12 +680,45 @@ func (manager *TorrentManager) importCompleted() bool {
 			continue
 		}
 		for _, file := range files {
+			if !selectedSeasons[file.Season] || deletingSeasons[file.Season] {
+				continue
+			}
 			key := hash + ":" + strconv.Itoa(file.Index)
 			manager.mu.Lock()
 			wasImported := manager.imported[key]
 			manager.mu.Unlock()
+			if wasImported {
+				target, _, targetErr := importTarget(manager.mediaRoot, selection.SeriesTitle, file)
+				if targetErr != nil {
+					manager.finishImport(key, importFailureDetail(targetErr))
+					continue
+				}
+				targetInfo, statErr := os.Lstat(target)
+				switch {
+				case errors.Is(statErr, os.ErrNotExist):
+					manager.mu.Lock()
+					delete(manager.imported, key)
+					delete(manager.importErrors, key)
+					manager.saveStateLocked()
+					manager.mu.Unlock()
+					wasImported = false
+				case statErr != nil:
+					manager.finishImport(key, importFailureDetail(statErr))
+					continue
+				case !targetInfo.Mode().IsRegular() || targetInfo.Size() != file.Size:
+					manager.finishImport(key, importFailureDetail(errImportCollision))
+					continue
+				default:
+					manager.mu.Lock()
+					if _, exists := manager.importErrors[key]; exists {
+						delete(manager.importErrors, key)
+						manager.saveStateLocked()
+					}
+					manager.mu.Unlock()
+				}
+			}
 			season, _, _, parseErr := parseTorrentEpisode(file.Name)
-			if wasImported || file.Progress < 0.999999 || file.Priority == 0 || !supportedTorrentVideo(file.Name) || parseErr != nil || season != file.Season {
+			if wasImported || file.Progress < 0.999999 || !supportedTorrentVideo(file.Name) || parseErr != nil || season != file.Season {
 				continue
 			}
 			manager.mu.Lock()
@@ -717,12 +821,10 @@ func (manager *TorrentManager) importFileFromPath(file TorrentFile, seriesTitle,
 }
 
 func (manager *TorrentManager) importFileFromPathWithProgress(file TorrentFile, seriesTitle, source string, progress func(int)) error {
-	season, episode, title, err := parseTorrentEpisode(file.Name)
+	target, _, err := importTarget(manager.mediaRoot, seriesTitle, file)
 	if err != nil {
 		return err
 	}
-	relative := filepath.Join(seriesTitle, fmt.Sprintf("Season %02d", season), fmt.Sprintf("S%02dE%02d - %s%s", season, episode, title, strings.ToLower(filepath.Ext(file.Name))))
-	target := filepath.Join(manager.mediaRoot, relative)
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}

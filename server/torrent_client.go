@@ -121,14 +121,18 @@ func (manager *TorrentManager) filePriority(hash string, files []TorrentFile, se
 			ids = append(ids, strconv.Itoa(index))
 		}
 	}
+	priority := 0
+	if selected != nil {
+		priority = 1
+	}
+	return manager.setFilePriority(hash, ids, priority)
+}
+
+func (manager *TorrentManager) setFilePriority(hash string, ids []string, priority int) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	priority := "0"
-	if selected != nil {
-		priority = "1"
-	}
-	_, err := manager.postForm("/api/v2/torrents/filePrio", url.Values{"hash": {hash}, "id": {strings.Join(ids, "|")}, "priority": {priority}})
+	_, err := manager.postForm("/api/v2/torrents/filePrio", url.Values{"hash": {hash}, "id": {strings.Join(ids, "|")}, "priority": {strconv.Itoa(priority)}})
 	return err
 }
 

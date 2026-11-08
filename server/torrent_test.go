@@ -75,7 +75,7 @@ func TestStartSelectsOnlyNumberedEpisodes(t *testing.T) {
 	if err := manager.Start(source.ID, TorrentSelection{SeriesTitle: "Series", Seasons: []int{1}}); err != nil {
 		t.Fatal(err)
 	}
-	if len(priorities) != 2 || priorities[0].Get("id") != "0|1" || priorities[0].Get("priority") != "0" || priorities[1].Get("id") != "0" || priorities[1].Get("priority") != "1" {
+	if len(priorities) != 2 || priorities[0].Get("id") != "0|1" || priorities[0].Get("priority") != "0" || priorities[1].Get("id") != "0" || priorities[1].Get("priority") != "7" {
 		t.Fatalf("unexpected priorities: %#v", priorities)
 	}
 }
