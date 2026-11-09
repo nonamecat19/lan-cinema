@@ -9,6 +9,7 @@ export function useDownloadManager() {
   const [selection, setSelection] = useState<TorrentSelection | null>(null)
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([])
   const [seriesTitle, setSeriesTitle] = useState('')
+  const [forceOneByOne, setForceOneByOne] = useState(false)
   const [requestError, setRequestError] = useState('')
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -57,6 +58,7 @@ export function useDownloadManager() {
     setSelection(result)
     setSelectedSeasons(result.seasons)
     setSeriesTitle(result.seriesTitle)
+    setForceOneByOne(false)
   }
 
   function inspect(source: TorrentSource): Promise<void> {
@@ -82,7 +84,7 @@ export function useDownloadManager() {
   function start(): Promise<void> {
     if (!selectedSource || !selection) return Promise.resolve()
     return run(async () => {
-      await api.startTorrent(selectedSource.id, { seriesTitle: seriesTitle.trim(), seasons: selectedSeasons })
+      await api.startTorrent(selectedSource.id, { seriesTitle: seriesTitle.trim(), seasons: selectedSeasons, forceOneByOne })
       setSelection(null)
       setSelectedSource(null)
       await refresh(true)
@@ -97,5 +99,5 @@ export function useDownloadManager() {
     return run(async () => { await api.updateDownload(download.hash, action); await refresh(true) })
   }
 
-  return { sources, downloads, selectedSource, selection, selectedSeasons, seriesTitle, setSeriesTitle, requestError, actionError, busy, loading, inspect, upload, start, toggleSeason, update }
+  return { sources, downloads, selectedSource, selection, selectedSeasons, seriesTitle, setSeriesTitle, forceOneByOne, setForceOneByOne, requestError, actionError, busy, loading, inspect, upload, start, toggleSeason, update }
 }

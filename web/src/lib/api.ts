@@ -32,7 +32,7 @@ export const api = {
     body.append('torrent', file)
     return request('/api/torrents', responseGuards.torrentSource, { method: 'POST', body })
   },
-  startTorrent: (id: string, selection: Pick<TorrentSelection, 'seriesTitle' | 'seasons'>) => request(`/api/torrents/${encodeURIComponent(id)}/start`, responseGuards.accepted, {
+  startTorrent: (id: string, selection: Pick<TorrentSelection, 'seriesTitle' | 'seasons' | 'forceOneByOne'>) => request(`/api/torrents/${encodeURIComponent(id)}/start`, responseGuards.accepted, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(selection),
@@ -60,5 +60,15 @@ export const api = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(command),
+  }),
+  updateSeason: (seriesId: string, sourceId: string, season: number, action: 'pause' | 'resume' | 'delete') => request(`/api/series/${encodeURIComponent(seriesId)}/seasons/${season}/${action}`, responseGuards.accepted, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceId }),
+  }),
+  setSeasonOrdering: (seriesId: string, sourceId: string, forceOneByOne: boolean) => request(`/api/series/${encodeURIComponent(seriesId)}/ordering`, responseGuards.accepted, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceId, forceOneByOne }),
   }),
 }

@@ -17,6 +17,7 @@ export interface TorrentFile {
 export interface TorrentSelection {
   seriesTitle: string
   seasons: number[]
+  forceOneByOne?: boolean
   files: TorrentFile[]
 }
 
@@ -24,6 +25,7 @@ export interface TorrentDownloadFile {
   name: string
   season: number
   episode: number
+  size: number
   progress: number
   status: string
   detail: string

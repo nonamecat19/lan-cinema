@@ -1,4 +1,4 @@
-import type { Catalog, Episode, EpisodeStatus, Season, Series, TorrentSeriesSource } from './media'
+import type { Catalog, Episode, EpisodeStatus, Season, Series, TorrentSeriesEpisode, TorrentSeriesSource } from './media'
 import type { TorrentDownload, TorrentDownloadFile, TorrentFile, TorrentSelection, TorrentSource } from './downloads'
 import type { RemoteCommand, RemoteDisplay, RemotePlaybackState, RemoteSyncResponse } from './remote'
 
@@ -41,8 +41,13 @@ function season(value: unknown): value is Season {
   return record(value) && number(value.number) && array(value.episodes, episode)
 }
 
+function torrentSeriesEpisode(value: unknown): value is TorrentSeriesEpisode {
+  return record(value) && number(value.season) && number(value.number) && string(value.name)
+}
+
 function torrentSeriesSource(value: unknown): value is TorrentSeriesSource {
-  return record(value) && string(value.id) && string(value.name) && array(value.availableSeasons, (item): item is TorrentSeriesSource['availableSeasons'][number] => record(item) && number(item.number) && number(item.episodes))
+  const option = (item: unknown): item is TorrentSeriesSource['seasons'][number] => record(item) && number(item.number) && number(item.episodes) && typeof item.selected === 'boolean' && typeof item.paused === 'boolean' && typeof item.deleting === 'boolean'
+  return record(value) && string(value.id) && string(value.hash) && string(value.name) && typeof value.forceOneByOne === 'boolean' && array(value.seasons, option) && array(value.availableSeasons, option) && (value.episodes === undefined || array(value.episodes, torrentSeriesEpisode))
 }
 
 function series(value: unknown): value is Series {
@@ -62,7 +67,7 @@ function torrentSelection(value: unknown): value is TorrentSelection {
 }
 
 function torrentDownloadFile(value: unknown): value is TorrentDownloadFile {
-  return record(value) && string(value.name) && number(value.season) && number(value.episode) && number(value.progress) && string(value.status) && string(value.detail)
+  return record(value) && string(value.name) && number(value.season) && number(value.episode) && number(value.size) && number(value.progress) && string(value.status) && string(value.detail)
 }
 
 function torrentDownload(value: unknown): value is TorrentDownload {

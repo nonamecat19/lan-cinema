@@ -54,8 +54,11 @@ export function progressPercent(episode: Episode): number {
 }
 
 export function continueWatchingItems(series: Series[]): ContinueWatchingItem[] {
-  return series.flatMap((show) => allEpisodes(show).flatMap((episode) => {
-    const progress = readProgress(episode.id)
-    return episode.status === 'ready' && progress && resumePosition(episode) ? [{ show, episode, progress }] : []
-  })).sort((a, b) => b.progress.updatedAt - a.progress.updatedAt || a.show.title.localeCompare(b.show.title))
+  return series.flatMap((show) => {
+    const latest = allEpisodes(show).flatMap((episode) => {
+      const progress = readProgress(episode.id)
+      return episode.status === 'ready' && progress && resumePosition(episode) ? [{ show, episode, progress }] : []
+    }).sort((a, b) => b.progress.updatedAt - a.progress.updatedAt || b.episode.seasonNumber - a.episode.seasonNumber || b.episode.number - a.episode.number)[0]
+    return latest ? [latest] : []
+  }).sort((a, b) => b.progress.updatedAt - a.progress.updatedAt || a.show.title.localeCompare(b.show.title))
 }

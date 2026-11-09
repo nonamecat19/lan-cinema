@@ -39,10 +39,14 @@
   .hero-copy { max-width: 100%; }
   .hero-index { display: none; }
   .episode-section { padding: 32px 0 45px; }
+  .season-tabs { gap: 7px; }
+  .season-tab { justify-content: flex-start; flex: 1 1 calc(50% - 7px); min-width: 0; padding: 9px 11px; }
+  .season-tab-status { white-space: normal; text-align: left; }
   .episode-row { grid-template-columns: 76px minmax(0, 1fr) 28px; gap: 10px; min-height: 93px; padding: 11px 4px; }
   .episode-info strong { font-size: 15px; }
   .episode-info .eyebrow { font-size: 8px; }
   .episode-info > span:last-child:not(.episode-progress) { font-size: 10px; }
+  .episode-info > span.episode-torrent-status { font-size: 9px; }
   .episode-duration { display: none; }
   .episode-play { width: 28px; height: 28px; font-size: 9px; }
   .download-heading { padding: 36px 0 32px; }
@@ -55,8 +59,10 @@
   .download-progress-meta { grid-column: 1 / -1; }
   .download-remove-confirm { flex-wrap: wrap; }
   .download-remove-confirm span { flex-basis: 100%; }
-  .torrent-series-source { align-items: flex-start; flex-direction: column; }
-  .torrent-season-actions { justify-content: flex-start; }
+  .series-download-heading { align-items: flex-start; flex-direction: column; }
+  .series-download-list { grid-template-columns: 1fr; }
+  .series-download-episodes > div { flex-direction: column; gap: 4px; }
+  .series-download-episodes > div span:last-child { max-width: none; text-align: left; }
   .download-file { flex-direction: column; gap: 5px; }
   .download-file-state { max-width: none; text-align: left; }
   .player-top { top: 18px; right: 18px; left: 18px; gap: 11px; }
@@ -112,7 +118,8 @@
   .series-hero p { font-size: 13px; }
   .episode-section { padding: 38px 0 48px; }
   .season-tabs { gap: 8px; margin-bottom: 20px; }
-  .season-tab { min-height: 44px; padding: 10px 16px; font-size: 10px; }
+  .season-tab { flex: 0 1 auto; min-height: 44px; padding: 10px 16px; font-size: 10px; }
+  .season-tab-status { font-size: 8px; }
   .episode-row { grid-template-columns: clamp(88px, 10vw, 150px) minmax(0, 1fr) 56px 44px; gap: 18px; min-height: 104px; padding: 14px 16px; }
   .episode-info strong { font-size: clamp(14px, 1.35vw, 20px); }
   .episode-info > span:last-child:not(.episode-progress) { font-size: 11px; }

@@ -25,12 +25,25 @@ export interface Season {
 export interface TorrentSeasonOption {
   number: number
   episodes: number
+  selected: boolean
+  paused: boolean
+  deleting: boolean
+}
+
+export interface TorrentSeriesEpisode {
+  season: number
+  number: number
+  name: string
 }
 
 export interface TorrentSeriesSource {
   id: string
+  hash: string
   name: string
+  forceOneByOne: boolean
+  seasons: TorrentSeasonOption[]
   availableSeasons: TorrentSeasonOption[]
+  episodes?: TorrentSeriesEpisode[]
 }
 
 export interface Series {

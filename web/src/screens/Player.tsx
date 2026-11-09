@@ -9,6 +9,7 @@ import { remoteAction } from '../remote/keys'
 import { nextReadyEpisode } from '../lib/catalog'
 import { formatTime, pad } from '../lib/format'
 import { clearProgress, resumePosition, writeProgress } from '../lib/progress'
+import { episodeWatchPath } from '../lib/routes'
 
 const noRemoteCommands: RemoteCommand[] = []
 const ignoreRemoteCommand = (_id: string) => {}
@@ -117,11 +118,11 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
   useEffect(() => {
     if (countdown === null || !nextEpisode || countdown <= 0) return undefined
     const timer = setTimeout(() => {
-      if (countdown === 1) navigate(`/watch/${nextEpisode.id}`, true)
+      if (countdown === 1) navigate(episodeWatchPath(series.id, nextEpisode.seasonNumber, nextEpisode.id), true)
       else setCountdown(countdown - 1)
     }, 1000)
     return () => clearTimeout(timer)
-  }, [countdown, nextEpisode, navigate])
+  }, [countdown, nextEpisode, navigate, series.id])
 
   function onMetadata() {
     const video = videoRef.current
@@ -230,7 +231,7 @@ export function Player({ episode, season, series, navigate, back, remoteCommands
   }
 
   function playNext() {
-    if (nextEpisode) navigate(`/watch/${nextEpisode.id}`, true)
+    if (nextEpisode) navigate(episodeWatchPath(series.id, nextEpisode.seasonNumber, nextEpisode.id), true)
     else {
       ended.current = false
       setCountdown(null)

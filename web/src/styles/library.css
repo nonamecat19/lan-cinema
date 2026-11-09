@@ -49,9 +49,18 @@
 .series-hero p span { margin: 0 8px; color: var(--accent); }
 .hero-index { align-self: flex-end; color: rgba(241, 245, 239, .65); font-size: 10px; font-weight: 700; letter-spacing: .17em; white-space: nowrap; }
 .episode-section { padding: 48px 0 65px; }
-.season-tabs { display: flex; gap: 10px; margin-bottom: 25px; padding: 5px 4px 12px; overflow-x: auto; }
-.season-tab { flex: none; min-height: 46px; padding: 11px 19px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .14em; }
+.season-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 25px; padding: 5px 4px 12px; }
+.season-tab { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; flex: 0 1 auto; min-height: 46px; padding: 11px 19px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .14em; }
 .season-tab.selected { border-color: var(--accent); background: rgba(200, 245, 140, .1); color: var(--accent); }
+.season-tab-status { display: inline-flex; align-items: center; gap: 4px; color: var(--status-color); font-size: 9px; font-weight: 600; letter-spacing: 0; line-height: 1.2; text-transform: none; white-space: nowrap; }
+.season-tab-status i, .season-status i, .episode-torrent-status i { font-style: normal; }
+.status-available { --status-color: var(--subtle); }
+.status-waiting, .status-paused { --status-color: #f3cf77; }
+.status-downloading { --status-color: #8edbff; }
+.status-importing { --status-color: #c8a8ff; }
+.status-preparing { --status-color: #a6cbff; }
+.status-ready { --status-color: var(--accent); }
+.status-attention, .status-unavailable { --status-color: var(--danger); }
 .episode-list { border-top: 1px solid var(--line); }
 .episode-row { position: relative; display: grid; grid-template-columns: clamp(110px, 13vw, 186px) minmax(0, 1fr) 70px 50px; align-items: center; gap: 24px; width: 100%; min-height: 128px; padding: 17px 20px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; transition: background .18s; }
 .episode-row:hover, .episode-row[data-remote-active="true"] { background: rgba(200, 245, 140, .07); }
@@ -63,17 +72,40 @@
 .episode-info .eyebrow { font-size: 9px; }
 .episode-info strong { overflow: hidden; font-size: clamp(16px, 1.6vw, 23px); font-weight: 600; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
 .episode-info > span:last-child:not(.episode-progress) { color: var(--muted); font-size: 12px; }
+.episode-row.is-torrent-only .episode-thumb { background: radial-gradient(circle at 50% 50%, rgba(200, 245, 140, .11), transparent 55%), linear-gradient(130deg, #263d3e, #10191b); }
+.episode-info .episode-torrent-status { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; color: var(--status-color); font-size: 11px; line-height: 1.35; }
+.episode-torrent-status b { color: var(--text); font-size: 10px; font-weight: 700; }
+.episode-torrent-status small { flex-basis: 100%; color: var(--muted); font-size: 10px; }
+.season-status { display: inline-flex; align-items: center; gap: 6px; color: var(--status-color); font-size: 11px; font-weight: 700; line-height: 1.35; }
 .episode-duration { color: var(--muted); font-size: 13px; text-align: right; }
 .episode-play { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid rgba(200, 245, 140, .4); border-radius: 50%; color: var(--accent); font-size: 12px; }
 .episode-progress { width: min(270px, 85%); height: 4px; margin-top: 5px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, .15); }
 .episode-progress i { display: block; height: 100%; background: var(--accent); }
-.torrent-seasons { padding: 38px 0 12px; }
-.torrent-seasons .section-heading { margin-bottom: 14px; }
-.torrent-series-source { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px 4px; border-top: 1px solid var(--line); }
-.torrent-series-source > div:first-child { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.torrent-series-source strong { overflow-wrap: anywhere; font-size: 15px; }
-.torrent-series-source span { color: var(--muted); font-size: 12px; }
-.torrent-season-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.torrent-season-actions .button { min-height: 42px; padding: 9px 13px; white-space: nowrap; }
-.torrent-season-actions small { margin-left: 7px; color: var(--muted); font-size: 10px; }
+.series-download-sources { margin: 0 0 18px; }
+.series-download-source { margin-bottom: 10px; border-top: 1px solid var(--line); }
+.series-download-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 4px 5px; }
+.series-download-heading > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.series-download-heading strong { overflow-wrap: anywhere; font-size: 15px; }
+.series-download-heading span { color: var(--muted); font-size: 12px; }
+.series-download-heading .button { min-height: 40px; padding: 9px 13px; white-space: nowrap; font-size: 12px; }
+.series-download-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.series-download-season { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, .025); }
+.series-download-main { display: flex; flex-direction: column; justify-content: space-between; gap: 15px; min-height: 115px; }
+.series-download-copy { display: flex; flex-direction: column; gap: 6px; }
+.series-download-source-name { overflow-wrap: anywhere; color: var(--subtle); font-size: 10px; }
+.series-download-copy strong { font-size: 16px; }
+.series-download-copy span { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.series-download-copy .season-status { color: var(--status-color); }
+.series-download-copy .series-download-bytes { color: var(--accent); }
+.series-download-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.series-download-actions .button { min-height: 36px; padding: 7px 10px; font-size: 11px; }
+.series-download-progress { height: 5px; margin-top: 15px; overflow: hidden; border-radius: 5px; background: rgba(255, 255, 255, .13); }
+.series-download-progress i { display: block; height: 100%; background: var(--accent); }
+.series-download-episodes { margin-top: 13px; border-top: 1px solid var(--line); }
+.series-download-episodes > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.series-download-episodes > div span:first-child { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+.series-download-episodes > div span:last-child { flex: none; max-width: 45%; text-align: right; }
+.series-download-season .download-remove-confirm { flex-wrap: wrap; margin-top: 14px; }
+.series-download-season .download-remove-confirm span { flex-basis: 100%; }
+.season-episodes-empty { margin: 0; padding: 20px 4px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .season-action-message { color: var(--accent); font-size: 13px; }
