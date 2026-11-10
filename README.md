@@ -40,9 +40,8 @@ In **TV remote mode**, choose a series, season, and episode, then tap **Play on 
 
 The startup scan recognizes series directories containing `Season NN` directories and files named `SNNENN - Title` with MP4, MKV, AVI, MOV, M4V, or WebM extensions. Manually added files are picked up after a server restart. Completed torrent downloads are imported and added to the catalog automatically. Unsupported codecs are prepared as 8-bit H.264/AAC MP4 in the cache. The library opens after scanning while media preparation continues in the background. Episode rows show probing, remuxing, conversion, validation, and failure status.
 
-Progress is stored in each browser's local storage and is not synchronized between devices. Unfinished episodes appear in the Continue watching shelf, ordered by the most recent playback. Media preparation writes only to the separate cache. Torrent imports create normalized copies or hard links in the library while preserving the originals for seeding.
+Progress is stored in each browser's local storage and is not synchronized between devices. The Continue watching shelf shows one entry per series, linking to its most recently watched unfinished episode across all seasons. Media preparation writes only to the separate cache. Torrent imports create normalized copies or hard links in the library while preserving the originals for seeding.
 
-See [spec](spec/00-overview.md) for the complete behavior and acceptance criteria.
 
 ## Docker Compose
 
@@ -57,7 +56,7 @@ On a Linux host with an AMD VAAPI render device at `/dev/dri/renderD128`, add `C
 
 Open **Downloads** in the app to upload a `.torrent` file from your device or select one from the project root or `TORRENT_EXTRA_HOST_PATH`, inspect its contents, choose seasons, and start, pause, or remove transfers. Removing a transfer deletes its qBittorrent staging data while imported episodes stay in the media library. Uploaded torrent files persist in `./cache/torrent-uploads` and are limited to 8 MB. The app imports each completed video into the matching series and season folder in `MEDIA_HOST_PATH`, preserving qBittorrent's original files for seeding. It prepares imported MKV and other supported video files for browser playback and refreshes the catalog automatically.
 
-The Downloads page shows transfer state and per-episode download, waiting import, active copy progress, import errors, and media preparation status. Import errors remain visible after a restart and clear when a later attempt succeeds. A series imported from a selected torrent shows that torrent on its series page. If the torrent contains seasons that have not been selected, use **More seasons** there to add them to the existing transfer.
+The Downloads page shows transfer state and per-episode download, waiting import, active copy progress, import errors, and media preparation status. Import errors remain visible after a restart and clear when a later attempt succeeds. A series imported from a selected torrent shows every season in that torrent on its series page, including seasons that are still downloading. Each season shows progress and can be downloaded, paused, resumed, or deleted independently. Deleting a season removes its staged files and episodes imported from that torrent. Normal mode prioritizes earlier seasons while allowing later seasons to download; **Force one by one** downloads one episode at a time in season and episode order.
 
 Put additional `.torrent` files beside `compose.yaml`, then reload the Downloads screen. Torrent data and client settings persist in `./downloads` and `./qbt-config`. The qBittorrent WebUI is not published on the host. TCP and UDP port `6881` are published for peer connections; allow them through the host firewall if downloads need incoming peers.
 
@@ -82,11 +81,11 @@ Stop the app with `docker compose down`.
 - `server/catalog.go` scans the media library and builds the public catalog.
 - `server/media_probe.go`, `server/media_preview.go`, and `server/prepare.go` probe, preview, and prepare playable media.
 - `server/http.go` serves the catalog, media, and frontend. `server/http_downloads.go` exposes torrent and transfer actions.
-- `server/torrent.go`, `server/torrent_client.go`, `server/torrent_metadata.go`, and `server/torrent_state.go` own the download workflow, qBittorrent requests, metadata parsing, and persisted selections.
+- `server/torrent.go`, `server/torrent_client.go`, `server/torrent_metadata.go`, `server/torrent_season_management.go`, and `server/torrent_state.go` own the download workflow, qBittorrent requests, metadata parsing, season controls, and persisted selections.
 - `web/src/App.tsx` chooses the current screen. `web/src/screens` holds screen views, `web/src/features` holds feature state and components, `web/src/domain` defines API models and validates responses, `web/src/remote` owns TV key and focus behavior, and `web/src/hooks` owns routing and catalog polling.
 
 Run `go test -race ./...` for backend checks. In `web`, run `npm test` for remote navigation tests and `npm run build` for strict TypeScript checking and the production bundle.
 
 The remote uses arrows or digits 2/4/6/8 to move, OK or 5 to select, and Back or 0 to return. The selected season and focused episode are restored when returning from playback.
 
-The player requests browser fullscreen after an episode is selected. If the TV browser rejects fullscreen, it remains usable in the viewport. Follow the [TV acceptance procedure](spec/04-verification.md#tv-acceptance) on the intended TV and record the results; automated tests do not verify physical remote behavior or the three-second first-frame target.
+The player requests browser fullscreen after an episode is selected. If the TV browser rejects fullscreen, it remains usable in the viewport. Automated tests do not verify physical remote behavior or the three-second first-frame target.
